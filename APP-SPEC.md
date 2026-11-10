@@ -38,6 +38,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 17. **Oscilloscope:** two channels showing voltage over time at any probed point.
 18. **Real sound:** speaker parts play the actual simulated waveform through the computer's speakers. Starts muted on first visit, with a master volume slider and a built-in limiter so no circuit can be harmfully loud.
 19. **Sound & Timing track:** about 10 lessons (oscillators, the 555 timer, sound effects).
+19a. **AC and power parts (added 2026-11-10):** a low-voltage AC source / signal generator with adjustable frequency (never household mains), half-wave and full-wave (4-diode bridge) rectifiers with a smoothing capacitor, a transformer, and an inductor. Shown on the oscilloscope: the wave chopped, flipped, then smoothed, with ripple shrinking as the capacitor grows.
 
 **Milestone 3: Digital Logic and Arduino**
 20. **Digital parts:** logic gates, flip-flops, and a 7-segment display.
@@ -47,6 +48,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 24. **Digital Logic & Arduino track:** about 10 lessons.
 
 ### Later (not in version 1)
+- **More parts, added as lessons need them (added 2026-11-10):** more LED colors (green, blue, white, each with its own voltage) and an RGB LED, Zener diode, PNP transistor, MOSFET, thermistor, 5 V voltage regulator (7805), motor, relay with protection diode, and fuse. These work in the settled-state simulator, so any can be pulled into milestone 1 if a lesson calls for it.
 - Block-based programming with a "Show me the code" button revealing the equivalent Arduino code
 - Logic analyzer instrument
 - "Build it for real" panel: a real-world parts list per lesson
