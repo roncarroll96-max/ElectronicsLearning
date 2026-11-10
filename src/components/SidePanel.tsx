@@ -1,4 +1,6 @@
-import { pinKey, analyzeNets, type Circuit } from '../model/circuit';
+import { flipPart, pinKey, analyzeNets, type Circuit } from '../model/circuit';
+import type { Lesson } from '../learn/lessons';
+import { LessonPanel, TrackList } from './LessonPanel';
 import { PART_DEFS, formatReading } from '../model/parts';
 import type { SimResult } from '../sim/simulate';
 import type { EditFn } from '../state/useCircuit';
@@ -8,15 +10,23 @@ import { ValueEditor } from './ValueEditor';
 import { WhyPanel } from './WhyPanel';
 import type { Mode } from './TopBar';
 
-const TRACKS = [
-  { name: 'Foundations', desc: 'Voltage, current, resistance, Ohm’s law', lessons: 10 },
-  { name: 'Components in Depth', desc: 'Capacitors, diodes, transistors, sensors', lessons: 10 },
-  { name: 'Sound & Timing', desc: 'Oscillators, the 555 timer, sound', lessons: 10, later: true },
-  { name: 'Digital & Arduino', desc: 'Logic gates, then real Arduino code', lessons: 10, later: true },
-];
+export interface LessonProps {
+  lesson?: Lesson;
+  done: readonly string[];
+  completed: ReadonlySet<string>;
+  next?: Lesson;
+  onOpen: (id: string) => void;
+  onBack: () => void;
+  onRestart: () => void;
+  onNext: () => void;
+}
 
-interface Props {
+interface Props extends InspectorProps {
   mode: Mode;
+  learn: LessonProps;
+}
+
+interface InspectorProps {
   circuit: Circuit;
   selection: string[];
   sim: SimResult;
@@ -29,49 +39,58 @@ interface Props {
   onDelete: () => void;
 }
 
-/** Right-hand panel: lesson tracks in Learn mode, part inspector in Sandbox mode. */
-export function SidePanel({ mode, ...inspector }: Props) {
+/** Right-hand panel: tracks and lessons in Learn mode, the part inspector in Sandbox mode. */
+export function SidePanel({ mode, learn, ...inspector }: Props) {
+  if (mode === 'learn' && !learn.lesson) {
+    return (
+      <aside className="panel" aria-label="Lessons">
+        <div className="panel-head">
+          <span className="panel-title">Lessons</span>
+        </div>
+        <div className="panel-body">
+          <TrackList completed={learn.completed} onOpen={learn.onOpen} />
+        </div>
+      </aside>
+    );
+  }
+  if (mode === 'learn' && learn.lesson) {
+    const hasSelection = inspector.selection.length > 0;
+    return (
+      <aside className="panel" aria-label="Lesson">
+        <div className="panel-body">
+          <LessonPanel
+            lesson={learn.lesson}
+            done={learn.done}
+            onBack={learn.onBack}
+            onRestart={learn.onRestart}
+            next={learn.next}
+            onNext={learn.onNext}
+          />
+          {hasSelection && (
+            <div className="lesson-selected">
+              <div className="panel-title">Selected part</div>
+              <Inspector {...inspector} />
+              <WhyPanel circuit={inspector.circuit} sim={inspector.sim} selection={inspector.selection} lesson={learn.lesson} />
+            </div>
+          )}
+        </div>
+      </aside>
+    );
+  }
   return (
-    <aside className="panel" aria-label={mode === 'learn' ? 'Lessons' : 'Inspector'}>
-      {mode === 'learn' ? (
-        <>
-          <div className="panel-head">
-            <span className="panel-title">Tracks</span>
-          </div>
-          <div className="panel-body">
-            <ul className="track-list">
-              {TRACKS.map((t, i) => (
-                <li key={t.name} className={`track${t.later ? ' later' : ''}`}>
-                  <span className="track-num">{i + 1}</span>
-                  <div className="track-text">
-                    <span className="track-name">{t.name}</span>
-                    <span className="track-desc">{t.desc}</span>
-                    <div className="progress" aria-label="0% complete">
-                      <span style={{ width: '0%' }} />
-                    </div>
-                  </div>
-                  <span className="track-count">{t.later ? 'Soon' : `0/${t.lessons}`}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="panel-head">
-            <span className="panel-title">Inspector</span>
-          </div>
-          <div className="panel-body">
-            <Inspector {...inspector} />
-            <WhyPanel circuit={inspector.circuit} sim={inspector.sim} selection={inspector.selection} />
-          </div>
-        </>
-      )}
+    <aside className="panel" aria-label="Inspector">
+      <div className="panel-head">
+        <span className="panel-title">Inspector</span>
+      </div>
+      <div className="panel-body">
+        <Inspector {...inspector} />
+        <WhyPanel circuit={inspector.circuit} sim={inspector.sim} selection={inspector.selection} />
+      </div>
     </aside>
   );
 }
 
-function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: Omit<Props, 'mode'>) {
+function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: InspectorProps) {
   if (selection.length === 0) {
     return (
       <div className="inspector-empty">
@@ -156,17 +175,29 @@ function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, on
           );
         })}
       </ul>
-      <InspectorActions onRotate={onRotate} onDelete={onDelete} />
+      <InspectorActions
+        onRotate={onRotate}
+        onDelete={onDelete}
+        onFlip={POLARIZED.includes(part.kind) ? () => edit((c) => flipPart(c, part.id)) : undefined}
+      />
     </div>
   );
 }
 
-function InspectorActions({ onRotate, onDelete }: { onRotate?: () => void; onDelete: () => void }) {
+/** Two-pin parts with a + and − that can be turned around. */
+const POLARIZED = ['led', 'diode', 'buzzer', 'capacitor', 'battery'];
+
+function InspectorActions({ onRotate, onDelete, onFlip }: { onRotate?: () => void; onDelete: () => void; onFlip?: () => void }) {
   return (
     <div className="insp-actions">
       {onRotate && (
         <button className="btn" onClick={onRotate}>
           Rotate <kbd>R</kbd>
+        </button>
+      )}
+      {onFlip && (
+        <button className="btn" onClick={onFlip} title="Swap its + and − ends">
+          Turn around
         </button>
       )}
       <button className="btn danger" onClick={onDelete}>

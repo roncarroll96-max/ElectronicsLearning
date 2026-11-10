@@ -43,6 +43,8 @@ export interface CanvasApi {
   dropPart(kind: PartKind, clientX: number, clientY: number): boolean;
   /** Place a part in the middle of the visible area, avoiding existing parts. */
   addPartAtCenter(kind: PartKind): void;
+  /** Zoom and pan so the whole circuit is in view. */
+  fit(): void;
 }
 
 interface Props {
@@ -283,6 +285,7 @@ export function CircuitCanvas(props: Props) {
         const spot = freeSpot(snap(w.x), snap(w.y));
         placePart(kind, spot.x, spot.y);
       },
+      fit: fitToContent,
     };
   });
 

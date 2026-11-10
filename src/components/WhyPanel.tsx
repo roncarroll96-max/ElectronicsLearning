@@ -2,9 +2,10 @@ import { useState } from 'react';
 import type { Circuit } from '../model/circuit';
 import { whyThisValue } from '../learn/why';
 import type { SimResult } from '../sim/simulate';
+import type { Lesson } from '../learn/lessons';
 
 /** The "Why this value?" card for the selected part. */
-export function WhyPanel({ circuit, sim, selection }: { circuit: Circuit; sim: SimResult; selection: string[] }) {
+export function WhyPanel({ circuit, sim, selection, lesson }: { circuit: Circuit; sim: SimResult; selection: string[]; lesson?: Lesson }) {
   const [showMath, setShowMath] = useState(false);
   const part = selection.length === 1 ? circuit.parts.find((p) => p.id === selection[0]) : undefined;
 
@@ -22,6 +23,7 @@ export function WhyPanel({ circuit, sim, selection }: { circuit: Circuit; sim: S
     <section className="callout why" aria-label="Why this value?">
       <span className="callout-label">Why this value?</span>
       <span className="why-role">{why.role}</span>
+      {lesson?.why?.[part.kind] && <Section label="In this lesson" text={lesson.why[part.kind]!} />}
       <Section label="Goal" text={why.goal} />
       <Section label="Reasoning" text={why.reasoning} />
       {why.choice && <Section label="Choosing the value" text={why.choice} />}

@@ -8,9 +8,13 @@ import { CircuitCanvas, type CanvasApi } from './canvas/CircuitCanvas';
 import { BurnNotice } from './components/BurnNotice';
 import { HelpPanel, INITIAL_HELP, type HelpState } from './components/HelpPanel';
 import { diagnose, type Issue } from './learn/diagnose';
+import { lessonById, nextLesson } from './learn/lessons';
+import { advance, currentStep, isComplete } from './learn/lessons/progress';
+import { topology } from './learn/topology';
+import { hasBeenWelcomed, markWelcomed, Welcome, type WelcomeChoice } from './components/Welcome';
 import { MeterPanel } from './meter/MeterPanel';
 import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterState } from './meter/meter';
-import { deleteItems, rotateParts, updatePart } from './model/circuit';
+import { deleteItems, EMPTY_CIRCUIT, rotateParts, updatePart, type Circuit } from './model/circuit';
 import type { PartKind } from './model/parts';
 import { worstBurnout } from './sim/ratings';
 import { simulate } from './sim/simulate';
@@ -26,7 +30,7 @@ export function App() {
   // On narrow screens (tablets in portrait) the side panels slide over the canvas.
   const [panelsOpen, setPanelsOpen] = useState(false);
 
-  const { circuit, edit, undo, redo, canUndo, canRedo } = useCircuit();
+  const { circuit, edit, undo, redo, load, canUndo, canRedo } = useCircuit();
   const [rawSelection, setSelection] = useState<string[]>([]);
   const canvasApi = useRef<CanvasApi | null>(null);
   const [ghost, setGhost] = useState<{ kind: PartKind; x: number; y: number } | null>(null);
@@ -58,6 +62,73 @@ export function App() {
   const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
   const meterReading = useMemo(() => (meter.open ? readMeter(liveCircuit, meter, sim) : null), [liveCircuit, meter, sim]);
   const supply = circuit.parts.find((p) => p.kind === 'battery')?.value ?? 9;
+
+  /* ---------- Lessons ---------- */
+  const [welcome, setWelcome] = useState(() => !hasBeenWelcomed());
+  const [lessonId, setLessonId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Record<string, string[]>>({});
+  const [completed, setCompleted] = useState<ReadonlySet<string>>(() => new Set());
+  const lesson = lessonId ? lessonById(lessonId) : undefined;
+
+  // The sandbox and each lesson have their own circuit. Switching puts the current one aside.
+  const workspace = mode === 'learn' && lessonId ? `lesson:${lessonId}` : 'sandbox';
+  const [activeWorkspace, setActiveWorkspace] = useState('sandbox');
+  const stash = useRef(new Map<string, Circuit>());
+  const switchTo = useCallback(
+    (key: string, fresh = false) => {
+      const lessonFor = key.startsWith('lesson:') ? lessonById(key.slice(7)) : undefined;
+      const saved = fresh ? undefined : stash.current.get(key);
+      load(saved ?? lessonFor?.starter?.() ?? EMPTY_CIRCUIT);
+      setActiveWorkspace(key);
+      setSelection([]);
+      setPressed(new Set());
+      setBurnNotice(null);
+      setHelp((h) => ({ ...h, open: false }));
+      window.setTimeout(() => canvasApi.current?.fit(), 30);
+    },
+    [load],
+  );
+  useEffect(() => {
+    if (workspace === activeWorkspace) return;
+    stash.current.set(activeWorkspace, circuit);
+    switchTo(workspace);
+    // Only when the workspace changes.
+  }, [workspace]);
+
+  const lessonActive = !!lesson && activeWorkspace === `lesson:${lesson.id}`;
+  const done = lesson ? (progress[lesson.id] ?? []) : [];
+  useEffect(() => {
+    if (!lessonActive || !lesson) return;
+    const before = progress[lesson.id] ?? [];
+    const after = advance(lesson, before, { c: liveCircuit, sim, t: topology(liveCircuit), meter, reading: meterReading });
+    if (after.length === before.length) return;
+    setProgress((p) => ({ ...p, [lesson.id]: after }));
+    if (isComplete(lesson, after)) setCompleted((s) => new Set(s).add(lesson.id));
+  }, [sim, meterReading, lessonActive]);
+
+  const openLesson = useCallback((id: string) => {
+    setMode('learn');
+    setLessonId(id);
+  }, []);
+  const restartLesson = useCallback(() => {
+    if (!lesson) return;
+    setProgress((p) => ({ ...p, [lesson.id]: [] }));
+    stash.current.delete(`lesson:${lesson.id}`);
+    switchTo(`lesson:${lesson.id}`, true);
+  }, [lesson, switchTo]);
+  const next = lesson ? nextLesson(lesson.id) : undefined;
+  const trayHint = lessonActive && lesson ? currentStep(lesson, done)?.tray : undefined;
+
+  const onWelcome = useCallback(
+    (choice: WelcomeChoice) => {
+      markWelcomed();
+      setWelcome(false);
+      if (choice === 'first-led') openLesson('first-led');
+      else if (choice === 'lessons') setMode('learn');
+      else setMode('sandbox');
+    },
+    [openLesson],
+  );
 
   /* ---------- Burnouts ---------- */
   const [burnNotice, setBurnNotice] = useState<string | null>(null);
@@ -200,7 +271,7 @@ export function App() {
         onTogglePanels={() => setPanelsOpen((o) => !o)}
       />
       <div className="workspace">
-        <PartsTray onTileDown={onTileDown} onTileActivate={onTileActivate} />
+        <PartsTray onTileDown={onTileDown} onTileActivate={onTileActivate} highlight={trayHint} />
         <CircuitCanvas
           mode={mode}
           view={view}
@@ -242,6 +313,16 @@ export function App() {
         </CircuitCanvas>
         <SidePanel
           mode={mode}
+          learn={{
+            lesson,
+            done,
+            completed,
+            next,
+            onOpen: openLesson,
+            onBack: () => setLessonId(null),
+            onRestart: restartLesson,
+            onNext: () => next && openLesson(next.id),
+          }}
           circuit={circuit}
           selection={selection}
           sim={sim}
@@ -261,6 +342,7 @@ export function App() {
           <PartIcon kind={ghost.kind} />
         </div>
       )}
+      {welcome && <Welcome onChoose={onWelcome} />}
     </div>
   );
 }

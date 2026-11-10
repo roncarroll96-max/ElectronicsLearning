@@ -19,7 +19,8 @@ interface History {
 type Action =
   | { type: 'edit'; recipe: (c: Circuit) => Circuit; record: boolean }
   | { type: 'undo' }
-  | { type: 'redo' };
+  | { type: 'redo' }
+  | { type: 'load'; circuit: Circuit };
 
 function reducer(h: History, a: Action): History {
   switch (a.type) {
@@ -33,6 +34,9 @@ function reducer(h: History, a: Action): History {
       if (h.past.length === 0) return h;
       return { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] };
     }
+    case 'load':
+      // A different circuit (switching between the sandbox and a lesson): fresh history.
+      return { past: [], present: a.circuit, future: [] };
     case 'redo': {
       if (h.future.length === 0) return h;
       return { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) };
@@ -48,12 +52,14 @@ export function useCircuit() {
   const edit = useCallback<EditFn>((recipe, record = true) => dispatch({ type: 'edit', recipe, record }), []);
   const undo = useCallback(() => dispatch({ type: 'undo' }), []);
   const redo = useCallback(() => dispatch({ type: 'redo' }), []);
+  const load = useCallback((circuit: Circuit) => dispatch({ type: 'load', circuit }), []);
 
   return {
     circuit: h.present,
     edit,
     undo,
     redo,
+    load,
     canUndo: h.past.length > 0,
     canRedo: h.future.length > 0,
   };

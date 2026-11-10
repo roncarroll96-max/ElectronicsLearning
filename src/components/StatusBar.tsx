@@ -22,7 +22,7 @@ export function StatusBar({ parts, wires, status }: { parts: number; wires: numb
         <span><i style={{ background: 'var(--sig-analog)' }} />Analog</span>
         <span><i style={{ background: 'var(--sig-digital)' }} />Digital</span>
       </span>
-      <span className="status-item faint">v0.5 · Step 5</span>
+      <span className="status-item faint">v0.6 · Step 6</span>
     </footer>
   );
 }

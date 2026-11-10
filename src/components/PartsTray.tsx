@@ -59,9 +59,11 @@ interface Props {
   onTileDown: (kind: PartKind, e: RPointerEvent) => void;
   /** Keyboard activation (Enter/Space) of a tile. */
   onTileActivate: (kind: PartKind) => void;
+  /** Tiles a lesson step is pointing at. */
+  highlight?: PartKind[];
 }
 
-export function PartsTray({ onTileDown, onTileActivate }: Props) {
+export function PartsTray({ onTileDown, onTileActivate, highlight }: Props) {
   const [query, setQuery] = useState('');
 
   const groups = useMemo(() => {
@@ -93,7 +95,7 @@ export function PartsTray({ onTileDown, onTileActivate }: Props) {
               {g.parts.map((p) => (
                 <li key={p.kind}>
                   <button
-                    className="part-tile"
+                    className={`part-tile${highlight?.includes(p.kind) ? ' pulse' : ''}`}
                     title={`${p.name}: drag onto the canvas, or click to add`}
                     onPointerDown={(e) => onTileDown(p.kind, e)}
                     onClick={(e) => {
