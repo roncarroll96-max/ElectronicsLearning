@@ -22,7 +22,7 @@ export type PartKind =
 
 export type Dir = 'l' | 'r' | 'u' | 'd';
 export type Rotation = 0 | 90 | 180 | 270;
-export type Unit = 'Ω' | 'F' | 'V';
+export type Unit = 'Ω' | 'F' | 'V' | 'A' | 'W';
 
 export interface PinDef {
   name: string;
@@ -221,6 +221,17 @@ export function formatValue(v: number, unit: Unit): string {
   e = Math.max(-12, Math.min(6, e));
   const num = parseFloat((v / 10 ** e).toPrecision(3));
   return `${num} ${PREFIXES[e]}${unit}`;
+}
+
+/**
+ * A measured value for display: like formatValue, but anything below what a
+ * real meter would show (1 µV, 1 nA, 1 nW) reads as zero.
+ */
+export function formatReading(v: number, unit: 'V' | 'A' | 'W'): string {
+  if (!Number.isFinite(v)) return '—';
+  const floor = unit === 'V' ? 1e-6 : 1e-9;
+  if (Math.abs(v) < floor) return `0 ${unit}`;
+  return formatValue(v, unit);
 }
 
 const BAND_COLORS = [

@@ -19,7 +19,15 @@ export interface Part {
   y: number;
   rot: Rotation;
   value?: number;
+  /** Switch closed / push button pressed. */
+  on?: boolean;
+  /** Potentiometer wiper position, 0 (at End A) to 1 (at End B). Default 0.5. */
+  pos?: number;
+  /** Light falling on a light sensor, 0 (dark) to 1 (bright). Default 0.5. */
+  light?: number;
 }
+
+export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light'>>;
 
 export interface PinRef {
   part: string;
@@ -107,6 +115,12 @@ export function deleteItems(c: Circuit, ids: ReadonlySet<string>): Circuit {
   const wires = c.wires.filter((w) => !ids.has(w.id) && alive.has(w.a.part) && alive.has(w.b.part));
   if (parts.length === c.parts.length && wires.length === c.wires.length) return c;
   return { parts, wires };
+}
+
+/** Changes a part's settings (value, switch state, wiper position, light level). */
+export function updatePart(c: Circuit, id: string, patch: PartPatch): Circuit {
+  if (!c.parts.some((p) => p.id === id)) return c;
+  return { ...c, parts: c.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
 }
 
 export function canConnect(c: Circuit, a: PinRef, b: PinRef): boolean {

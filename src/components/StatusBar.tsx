@@ -1,9 +1,17 @@
-export function StatusBar({ parts, wires }: { parts: number; wires: number }) {
+export type SimStatus = 'idle' | 'running' | 'failed';
+
+const STATUS_TEXT: Record<SimStatus, string> = {
+  idle: 'Simulator idle',
+  running: 'Simulating',
+  failed: 'Can’t solve this circuit',
+};
+
+export function StatusBar({ parts, wires, status }: { parts: number; wires: number; status: SimStatus }) {
   return (
     <footer className="statusbar">
-      <span className="status-item">
-        <span className="dot idle" aria-hidden="true" />
-        Simulator idle
+      <span className="status-item" role="status">
+        <span className={`dot ${status}`} aria-hidden="true" />
+        {STATUS_TEXT[status]}
         <span className="status-count">
           {parts} {parts === 1 ? 'part' : 'parts'} · {wires} {wires === 1 ? 'wire' : 'wires'}
         </span>
@@ -14,7 +22,7 @@ export function StatusBar({ parts, wires }: { parts: number; wires: number }) {
         <span><i style={{ background: 'var(--sig-analog)' }} />Analog</span>
         <span><i style={{ background: 'var(--sig-digital)' }} />Digital</span>
       </span>
-      <span className="status-item faint">v0.2 · Step 2</span>
+      <span className="status-item faint">v0.3 · Step 3</span>
     </footer>
   );
 }

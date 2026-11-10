@@ -15,11 +15,13 @@ Then open http://localhost:5180.
 
 - `npm run build`: production build into `dist/` (a static site that can be hosted anywhere)
 - `npm run typecheck`: check the TypeScript code for errors
+- `npm test`: run the simulator's tests (it's checked against hand calculations)
 
 ## Progress
 
 - Milestone 1, step 1: app shell (theme, layout, parts tray). Done.
 - Milestone 1, step 2: circuit canvas (drag parts in, wire pin to pin, move, rotate, delete, undo/redo, pan and zoom, realistic and schematic views). Done.
+- Milestone 1, step 3: simulator (calculates every voltage and current; live readings in the Sandbox inspector; switch, push button, potentiometer and light-sensor controls). Done.
 
 ### Canvas controls
 

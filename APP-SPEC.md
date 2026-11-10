@@ -69,6 +69,11 @@ Built in three milestones. Each milestone is a usable app on its own.
 
 ## Rules and edge cases
 - **Simulation accuracy is non-negotiable:** a teaching tool must never teach wrong physics. Where the simulator simplifies something, the lesson says so.
+- **Simulator assumptions (added in milestone 1, step 3):** every part model and its source is listed in `src/sim/models.ts`, and the simulator is checked against hand calculations in `src/sim/simulate.test.ts`. Known simplifications so far:
+  - The 9 V battery has 1.5 Ω of internal resistance, like a fresh alkaline one, so readings come out slightly below the "ideal battery" textbook answer (21.1 mA instead of 21.2 mA for an LED with 330 Ω).
+  - Until time-based simulation arrives (milestone 2), circuits are shown in their settled state: a capacitor is treated as fully charged and passes no current.
+  - The LED's reverse breakdown (around 5 V on real LEDs) isn't modeled yet; a reversed LED simply blocks.
+  - The transistor's gain (β) is a fixed, typical 200; real transistors vary from part to part.
 - **Part ratings:** each part has realistic limits (current, voltage, power). Exceeding them causes a burnout with an explanation.
 - **Impossible circuits** (such as a battery shorted by a wire) are caught gracefully, shown as a short circuit with an explanation, and never crash or freeze the app.
 - **Standard values:** "Why this value?" teaches that real parts come in standard sizes (for example 330 Ω, 390 Ω, 4.7 µF), and design challenges accept any sensible standard choice.
@@ -90,7 +95,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 - Runs entirely in a modern browser (Chrome, Edge, Firefox, Safari).
 - Hosted as a **free public website** (for example GitHub Pages) and works offline after the first visit.
 - No server, no hosting costs.
-- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth; Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at milestone 3).
+- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth (settled-state solving takes under a millisecond, so it runs directly for now and moves to the background thread with time-based simulation in milestone 2); Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at milestone 3).
 
 ## Decisions
 | Topic | Decision | Decided by |

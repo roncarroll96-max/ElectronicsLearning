@@ -1,6 +1,9 @@
 import { pinKey, analyzeNets, type Circuit } from '../model/circuit';
-import { PART_DEFS, formatValue } from '../model/parts';
+import { PART_DEFS, formatReading, formatValue } from '../model/parts';
+import type { SimResult } from '../sim/simulate';
+import type { EditFn } from '../state/useCircuit';
 import { PartIcon } from './PartIcon';
+import { PartControls, PartReadings, WireReading } from './Readings';
 import type { Mode } from './TopBar';
 
 const TRACKS = [
@@ -14,12 +17,16 @@ interface Props {
   mode: Mode;
   circuit: Circuit;
   selection: string[];
+  sim: SimResult;
+  edit: EditFn;
+  pressed: ReadonlySet<string>;
+  onPress: (id: string, down: boolean) => void;
   onRotate: () => void;
   onDelete: () => void;
 }
 
 /** Right-hand panel: lesson tracks in Learn mode, part inspector in Sandbox mode. */
-export function SidePanel({ mode, circuit, selection, onRotate, onDelete }: Props) {
+export function SidePanel({ mode, ...inspector }: Props) {
   return (
     <aside className="panel" aria-label={mode === 'learn' ? 'Lessons' : 'Inspector'}>
       {mode === 'learn' ? (
@@ -51,7 +58,7 @@ export function SidePanel({ mode, circuit, selection, onRotate, onDelete }: Prop
             <span className="panel-title">Inspector</span>
           </div>
           <div className="panel-body">
-            <Inspector circuit={circuit} selection={selection} onRotate={onRotate} onDelete={onDelete} />
+            <Inspector {...inspector} />
             <div className="callout">
               <span className="callout-label">Why this value?</span>
               <p>
@@ -66,7 +73,7 @@ export function SidePanel({ mode, circuit, selection, onRotate, onDelete }: Prop
   );
 }
 
-function Inspector({ circuit, selection, onRotate, onDelete }: Omit<Props, 'mode'>) {
+function Inspector({ circuit, selection, sim, edit, pressed, onPress, onRotate, onDelete }: Omit<Props, 'mode'>) {
   if (selection.length === 0) {
     return (
       <div className="inspector-empty">
@@ -104,6 +111,7 @@ function Inspector({ circuit, selection, onRotate, onDelete }: Omit<Props, 'mode
           <dt>To</dt>
           <dd>{name(wire.b)}</dd>
         </dl>
+        <WireReading wire={wire} sim={sim} from={name(wire.a)} to={name(wire.b)} />
         <InspectorActions onDelete={onDelete} />
       </div>
     );
@@ -113,6 +121,7 @@ function Inspector({ circuit, selection, onRotate, onDelete }: Omit<Props, 'mode
   if (!part) return null;
   const def = PART_DEFS[part.kind];
   const { wireCount } = analyzeNets(circuit);
+  const live = sim.ok && !sim.idle ? sim.parts.get(part.id) : undefined;
 
   return (
     <div className="inspector">
@@ -135,14 +144,20 @@ function Inspector({ circuit, selection, onRotate, onDelete }: Omit<Props, 'mode
         <dt>Rotation</dt>
         <dd className="mono">{part.rot}°</dd>
       </dl>
+      <PartControls part={part} edit={edit} pressed={pressed.has(part.id)} onPress={onPress} />
+      <PartReadings part={part} sim={sim} circuit={circuit} />
       <div className="insp-section">Pins</div>
       <ul className="insp-pins">
         {def.pins.map((pin, i) => {
           const n = wireCount.get(pinKey({ part: part.id, pin: i })) ?? 0;
+          const volts = live && n > 0 ? live.v[i] : null;
           return (
             <li key={i}>
               <span>{pin.name}</span>
-              <span className={n ? 'pin-ok' : 'pin-open'}>{n === 0 ? 'not connected' : n === 1 ? '1 wire' : `${n} wires`}</span>
+              <span className="pin-status">
+                <span className={n ? 'pin-ok' : 'pin-open'}>{n === 0 ? 'not connected' : n === 1 ? '1 wire' : `${n} wires`}</span>
+                {volts !== null && <span className="pin-v mono">{formatReading(volts, 'V')}</span>}
+              </span>
             </li>
           );
         })}

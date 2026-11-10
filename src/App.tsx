@@ -3,10 +3,11 @@ import { TopBar, type Mode, type View } from './components/TopBar';
 import { PartsTray } from './components/PartsTray';
 import { PartIcon } from './components/PartIcon';
 import { SidePanel } from './components/SidePanel';
-import { StatusBar } from './components/StatusBar';
+import { StatusBar, type SimStatus } from './components/StatusBar';
 import { CircuitCanvas, type CanvasApi } from './canvas/CircuitCanvas';
 import { deleteItems, rotateParts } from './model/circuit';
 import type { PartKind } from './model/parts';
+import { simulate } from './sim/simulate';
 import { useCircuit } from './state/useCircuit';
 import { useTheme } from './state/theme';
 
@@ -23,6 +24,27 @@ export function App() {
   const [rawSelection, setSelection] = useState<string[]>([]);
   const canvasApi = useRef<CanvasApi | null>(null);
   const [ghost, setGhost] = useState<{ kind: PartKind; x: number; y: number } | null>(null);
+
+  // Push buttons are only pressed while held, so their state lives here, outside the undo history.
+  const [pressed, setPressed] = useState<ReadonlySet<string>>(() => new Set());
+  const onPress = useCallback((id: string, down: boolean) => {
+    setPressed((prev) => {
+      if (prev.has(id) === down) return prev;
+      const next = new Set(prev);
+      if (down) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  // Re-solve whenever the circuit changes. A DC solve of a circuit this size takes well under a millisecond.
+  const sim = useMemo(() => {
+    const live = pressed.size
+      ? { ...circuit, parts: circuit.parts.map((p) => (pressed.has(p.id) ? { ...p, on: true } : p)) }
+      : circuit;
+    return simulate(live);
+  }, [circuit, pressed]);
+  const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
 
   // Drop ids that no longer exist (after delete or undo).
   const selection = useMemo(() => {
@@ -144,12 +166,16 @@ export function App() {
           mode={mode}
           circuit={circuit}
           selection={selection}
+          sim={sim}
+          edit={edit}
+          pressed={pressed}
+          onPress={onPress}
           onRotate={rotateSelected}
           onDelete={deleteSelected}
         />
         <button className="scrim" aria-label="Close panels" onClick={() => setPanelsOpen(false)} />
       </div>
-      <StatusBar parts={circuit.parts.length} wires={circuit.wires.length} />
+      <StatusBar parts={circuit.parts.length} wires={circuit.wires.length} status={simStatus} />
       {ghost && (
         <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }} aria-hidden="true">
           <PartIcon kind={ghost.kind} />

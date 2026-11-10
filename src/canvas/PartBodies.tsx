@@ -65,7 +65,7 @@ export function SchematicBody({ part }: { part: Part }) {
     case 'switch':
       return (
         <>
-          <path className="sym" d="M-40 0H-16M16 0H40M-14 -1L13 -14" />
+          <path className="sym" d={part.on ? 'M-40 0H-16M16 0H40M-14 -1L15 -3' : 'M-40 0H-16M16 0H40M-14 -1L13 -14'} />
           <circle className="sym-dot" cx="-16" r="2.5" />
           <circle className="sym-dot" cx="16" r="2.5" />
         </>
@@ -194,7 +194,8 @@ export function RealisticBody({ part }: { part: Part }) {
           <path className="lead" d="M-40 0H-20M20 0H40" />
           <rect x="-20" y="-10" width="40" height="20" rx="4" fill="#2f343d" stroke="#1b1e24" />
           <rect x="-16" y="-6" width="32" height="12" rx="2" fill="#1b1e24" />
-          <rect x="-15" y="-5" width="13" height="10" rx="2" fill="#e3e6eb" />
+          <rect x={part.on ? 2 : -15} y="-5" width="13" height="10" rx="2" fill="#e3e6eb" />
+          {part.on && <rect x="-14" y="-4" width="14" height="8" rx="1.5" fill="#34d399" opacity="0.85" />}
         </>
       );
     case 'pushbutton':
