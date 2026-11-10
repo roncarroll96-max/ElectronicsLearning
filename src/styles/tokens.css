@@ -42,12 +42,18 @@
 
   /* Canvas drawing */
   --symbol: #d5dae3;
+  --flow: #fde68a;
+  --lcd: #0b1412;
+  --lcd-text: #7df9d9;
   --lead: #9ba3b1;
   --bulb-glass: rgba(230, 236, 245, 0.12);
 }
 
 :root[data-theme='light'] {
   --symbol: #262c38;
+  --flow: #b45309;
+  --lcd: #dfeee9;
+  --lcd-text: #0b4f45;
   --lead: #7d8594;
   --bulb-glass: rgba(120, 140, 170, 0.12);
 

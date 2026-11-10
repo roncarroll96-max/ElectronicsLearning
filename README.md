@@ -15,13 +15,14 @@ Then open http://localhost:5180.
 
 - `npm run build`: production build into `dist/` (a static site that can be hosted anywhere)
 - `npm run typecheck`: check the TypeScript code for errors
-- `npm test`: run the simulator's tests (it's checked against hand calculations)
+- `npm test`: run the tests (the simulator is checked against hand calculations)
 
 ## Progress
 
 - Milestone 1, step 1: app shell (theme, layout, parts tray). Done.
 - Milestone 1, step 2: circuit canvas (drag parts in, wire pin to pin, move, rotate, delete, undo/redo, pan and zoom, realistic and schematic views). Done.
 - Milestone 1, step 3: simulator (calculates every voltage and current; live readings in the Sandbox inspector; switch, push button, potentiometer and light-sensor controls). Done.
+- Milestone 1, step 4: the circuit comes alive (glowing LEDs and lamps, buzzer waves, current-flow animation, burnouts with explanations and one-click replace, multimeter with volts, amps and ohms). Done.
 
 ### Canvas controls
 
@@ -29,4 +30,5 @@ Then open http://localhost:5180.
 - **Wire:** drag from one pin to another, or tap one pin and then the other
 - **Move:** drag a part; **Shift+click** selects several
 - **R** rotates, **Delete** removes, **Ctrl+Z / Ctrl+Y** undo and redo, **Esc** cancels
+- **Multimeter:** click the meter button in the toolbar, then drag the red and black probes onto pins
 - **Pan:** drag empty space (two fingers on a tablet); **zoom:** mouse wheel or pinch; click the % to fit

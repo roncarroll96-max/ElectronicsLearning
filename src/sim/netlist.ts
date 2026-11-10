@@ -84,7 +84,10 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
       devices.push({ type: 'pn', lt: [j, k], t: [], is: m.is, nvt, vcrit: criticalVoltage(m.is, nvt), s: [NaN] });
     };
 
-    switch (part.kind) {
+    // A burned-out part is broken open: it conducts nothing.
+    switch (part.burn ? 'burned' : part.kind) {
+      case 'burned':
+        break;
       case 'battery':
         hasSource = true;
         batteryMinus.push(local[1]);

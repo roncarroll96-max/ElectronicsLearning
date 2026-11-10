@@ -1,7 +1,9 @@
 import { useRef, type ReactNode } from 'react';
 import { updatePart, type Circuit, type Part, type Wire } from '../model/circuit';
 import { PART_DEFS, formatReading, formatValue } from '../model/parts';
+import { explainBurn, explainHot } from '../sim/explain';
 import { ldrResistance } from '../sim/models';
+import { stressOf } from '../sim/ratings';
 import type { SimResult } from '../sim/simulate';
 import type { EditFn } from '../state/useCircuit';
 
@@ -120,6 +122,35 @@ function Pair({ label, children }: { label: string; children: ReactNode }) {
       <dt>{label}</dt>
       <dd>{children}</dd>
     </>
+  );
+}
+
+/* ---------- Burned out, or running hot ---------- */
+
+export function PartHealth({ part, sim, supply, onReplace }: { part: Part; sim: SimResult; supply: number; onReplace: () => void }) {
+  if (part.burn) {
+    const ex = explainBurn(part, part.burn, supply);
+    return (
+      <div className="insp-alert danger" role="alert">
+        <strong>Burned out</strong>
+        <p>{ex.why}</p>
+        <p>
+          <span className="insp-alert-label">How to fix it</span> {ex.fix}
+        </p>
+        <button className="btn primary" onClick={onReplace}>
+          Replace {part.ref}
+        </button>
+      </div>
+    );
+  }
+  if (!sim.ok || sim.idle) return null;
+  const r = sim.parts.get(part.id);
+  const s = stressOf(part, r);
+  if (!s || s.level === 'ok' || !r) return null;
+  return (
+    <div className="insp-alert warn" role="status">
+      <p>{explainHot(part, s, r)}</p>
+    </div>
   );
 }
 

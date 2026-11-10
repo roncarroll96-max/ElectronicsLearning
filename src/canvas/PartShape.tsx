@@ -3,6 +3,7 @@ import { pinKey, type Part, type PinRef } from '../model/circuit';
 import { PART_DEFS, formatValue, rotatePoint, rotatedBounds } from '../model/parts';
 import type { View } from '../components/TopBar';
 import { RealisticBody, SchematicBody } from './PartBodies';
+import { PartGlow, Scorch, type PartLive } from './LiveFx';
 
 interface Props {
   part: Part;
@@ -10,23 +11,26 @@ interface Props {
   selected: boolean;
   wireCount: Map<string, number>;
   targetKey: string | null;
+  live?: PartLive;
   onPartDown: (e: RPointerEvent, part: Part) => void;
   onPinDown: (e: RPointerEvent, ref: PinRef) => void;
 }
 
 /** One part on the canvas: body, selection outline and connectable pins. */
-export function PartShape({ part, view, selected, wireCount, targetKey, onPartDown, onPinDown }: Props) {
+export function PartShape({ part, view, selected, wireCount, targetKey, live, onPartDown, onPinDown }: Props) {
   const def = PART_DEFS[part.kind];
   const b = def.bounds;
   return (
     <g
-      className={`part kind-${part.kind}${selected ? ' selected' : ''}`}
+      className={`part kind-${part.kind}${selected ? ' selected' : ''}${part.burn ? ' burned' : ''}${live?.hot ? ' hot' : ''}`}
       transform={`translate(${part.x} ${part.y}) rotate(${part.rot})`}
       onPointerDown={(e) => onPartDown(e, part)}
     >
       <rect className="part-hit" x={b.x - 6} y={b.y - 6} width={b.w + 12} height={b.h + 12} rx="8" />
+      {live?.hot && <rect className="part-hot" x={b.x - 9} y={b.y - 9} width={b.w + 18} height={b.h + 18} rx="10" />}
       {selected && <rect className="part-sel" x={b.x - 6} y={b.y - 6} width={b.w + 12} height={b.h + 12} rx="8" />}
-      {view === 'schematic' ? <SchematicBody part={part} /> : <RealisticBody part={part} />}
+      <g className="body">{view === 'schematic' ? <SchematicBody part={part} /> : <RealisticBody part={part} />}</g>
+      {part.burn ? <Scorch /> : live && <PartGlow part={part} view={view} live={live} />}
       {def.pins.map((pin, i) => {
         const key = pinKey({ part: part.id, pin: i });
         const connected = (wireCount.get(key) ?? 0) > 0;

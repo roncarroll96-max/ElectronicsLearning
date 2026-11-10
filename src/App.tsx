@@ -5,8 +5,12 @@ import { PartIcon } from './components/PartIcon';
 import { SidePanel } from './components/SidePanel';
 import { StatusBar, type SimStatus } from './components/StatusBar';
 import { CircuitCanvas, type CanvasApi } from './canvas/CircuitCanvas';
-import { deleteItems, rotateParts } from './model/circuit';
+import { BurnNotice } from './components/BurnNotice';
+import { MeterPanel } from './meter/MeterPanel';
+import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterState } from './meter/meter';
+import { deleteItems, rotateParts, updatePart } from './model/circuit';
 import type { PartKind } from './model/parts';
+import { worstBurnout } from './sim/ratings';
 import { simulate } from './sim/simulate';
 import { useCircuit } from './state/useCircuit';
 import { useTheme } from './state/theme';
@@ -37,14 +41,48 @@ export function App() {
     });
   }, []);
 
-  // Re-solve whenever the circuit changes. A DC solve of a circuit this size takes well under a millisecond.
-  const sim = useMemo(() => {
-    const live = pressed.size
-      ? { ...circuit, parts: circuit.parts.map((p) => (pressed.has(p.id) ? { ...p, on: true } : p)) }
-      : circuit;
-    return simulate(live);
-  }, [circuit, pressed]);
+  const [meter, setMeter] = useState<MeterState>(INITIAL_METER);
+
+  // The circuit as it is right now (held buttons pressed), and as the simulator sees it
+  // (plus the multimeter, which in volts and amps modes is part of the circuit).
+  const liveCircuit = useMemo(
+    () =>
+      pressed.size ? { ...circuit, parts: circuit.parts.map((p) => (pressed.has(p.id) ? { ...p, on: true } : p)) } : circuit,
+    [circuit, pressed],
+  );
+  const simCircuit = useMemo(() => circuitWithMeter(liveCircuit, meter), [liveCircuit, meter]);
+  // Re-solve whenever anything changes. A DC solve of a circuit this size takes well under a millisecond.
+  const sim = useMemo(() => simulate(simCircuit), [simCircuit]);
   const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
+  const meterReading = useMemo(() => (meter.open ? readMeter(liveCircuit, meter, sim) : null), [liveCircuit, meter, sim]);
+  const supply = circuit.parts.find((p) => p.kind === 'battery')?.value ?? 9;
+
+  /* ---------- Burnouts ---------- */
+  const [burnNotice, setBurnNotice] = useState<string | null>(null);
+  const lastCircuit = useRef(circuit);
+  useEffect(() => {
+    // A burnout caused by an edit joins that edit's undo step, so one undo takes back both.
+    // One caused by something outside the history (a held button, the meter) gets its own step.
+    const fromEdit = lastCircuit.current !== circuit;
+    lastCircuit.current = circuit;
+    const worst = worstBurnout(simCircuit, sim);
+    if (worst) {
+      edit((c) => updatePart(c, worst.id, { burn: worst.burn }), !fromEdit);
+      setBurnNotice(worst.id);
+    }
+    const blown = fuseOverload(meter, sim);
+    if (blown !== null) setMeter((m) => ({ ...m, fuseBlownAt: blown }));
+    // Runs once per new simulation result.
+  }, [sim]);
+
+  const replacePart = useCallback(
+    (id: string) => {
+      edit((c) => updatePart(c, id, { burn: undefined }));
+      setBurnNotice((n) => (n === id ? null : n));
+    },
+    [edit],
+  );
+  const noticePart = burnNotice ? circuit.parts.find((p) => p.id === burnNotice && p.burn) : undefined;
 
   // Drop ids that no longer exist (after delete or undo).
   const selection = useMemo(() => {
@@ -161,7 +199,29 @@ export function App() {
           canRedo={canRedo}
           onRotate={rotateSelected}
           onDelete={deleteSelected}
-        />
+          sim={sim}
+          meter={meter}
+          onMeter={setMeter}
+        >
+          {noticePart && (
+            <BurnNotice
+              key={noticePart.id}
+              part={noticePart}
+              supply={supply}
+              onReplace={() => replacePart(noticePart.id)}
+              onDismiss={() => setBurnNotice(null)}
+            />
+          )}
+          {meter.open && meterReading && (
+            <MeterPanel
+              meter={meter}
+              reading={meterReading}
+              onMode={(mode) => setMeter((m) => ({ ...m, mode }))}
+              onClose={() => setMeter((m) => ({ ...m, open: false }))}
+              onReplaceFuse={() => setMeter((m) => ({ ...m, fuseBlownAt: null }))}
+            />
+          )}
+        </CircuitCanvas>
         <SidePanel
           mode={mode}
           circuit={circuit}
@@ -170,6 +230,8 @@ export function App() {
           edit={edit}
           pressed={pressed}
           onPress={onPress}
+          supply={supply}
+          onReplace={replacePart}
           onRotate={rotateSelected}
           onDelete={deleteSelected}
         />

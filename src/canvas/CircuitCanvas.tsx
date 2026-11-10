@@ -29,7 +29,12 @@ import {
 import { GRID, PART_DEFS, rotatedBounds, type Dir, type PartKind } from '../model/parts';
 import type { EditFn } from '../state/useCircuit';
 import type { Mode, View } from '../components/TopBar';
+import { probePin, type MeterState, type Probe } from '../meter/meter';
+import { stressOf } from '../sim/ratings';
+import type { SimResult } from '../sim/simulate';
+import { GlowDefs, liveOf, Smoke, type PartLive } from './LiveFx';
 import { PartLabel, PartMarks, PartShape } from './PartShape';
+import { ProbeMarker, type ProbeColor } from './Probes';
 import { roundedPath, routeWire } from './wirePath';
 
 /** What the rest of the app can ask the canvas to do. */
@@ -54,6 +59,11 @@ interface Props {
   canRedo: boolean;
   onRotate: () => void;
   onDelete: () => void;
+  sim: SimResult;
+  meter: MeterState;
+  onMeter: (m: MeterState) => void;
+  /** Overlays drawn on top of the canvas (meter panel, notices). */
+  children?: ReactNode;
 }
 
 interface Viewport {
@@ -75,16 +85,33 @@ type Gesture =
   | { kind: 'pan'; pointerId: number; sx: number; sy: number; ox: number; oy: number }
   | { kind: 'drag'; pointerId: number; ids: Set<string>; start: Pt; applied: Pt; recorded: boolean }
   | { kind: 'wire'; pointerId: number; from: PinRef; sx: number; sy: number; moved: boolean }
-  | { kind: 'pinch'; d0: number; m0: Pt; v0: Viewport };
+  | { kind: 'pinch'; d0: number; m0: Pt; v0: Viewport }
+  | { kind: 'probe'; pointerId: number; color: ProbeColor; offset: Pt };
 
 const MIN_K = 0.3;
 const MAX_K = 3;
 const clampK = (k: number) => Math.min(MAX_K, Math.max(MIN_K, k));
 const snap = (n: number) => Math.round(n / GRID) * GRID;
 const PIN_SNAP_RADIUS = 16;
+const PROBE_SNAP_RADIUS = 22;
+
+/** Below this, current is too small to show as moving dots. */
+const FLOW_MIN = 1e-6;
+const FLOW_PERIOD = 16;
+
+/**
+ * Speed of the current-flow dots. Currents in a circuit span from microamps
+ * to amps, so speed follows the logarithm: every 10× more current adds the
+ * same amount of speed (1 µA crawls, 20 mA moves briskly, 1 A races).
+ */
+function flowStyle(i: number) {
+  const speed = 25 * Math.log10(Math.abs(i) / 1e-7); // canvas units per second
+  return { animationDuration: `${(FLOW_PERIOD / speed).toFixed(3)}s`, animationDirection: i > 0 ? 'normal' : 'reverse' } as const;
+}
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter } = props;
+  const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [vp, setVp] = useState<Viewport>({ x: 0, y: 0, k: 1 });
@@ -98,12 +125,26 @@ export function CircuitCanvas(props: Props) {
   circuitRef.current = circuit;
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const meterRef = useRef(meter);
+  meterRef.current = meter;
   const gesture = useRef<Gesture>({ kind: 'none' });
   const touches = useRef(new Map<number, Pt>());
 
   const selSet = useMemo(() => new Set(selection), [selection]);
   const nets = useMemo(() => analyzeNets(circuit), [circuit]);
   const partById = useMemo(() => new Map(circuit.parts.map((p) => [p.id, p])), [circuit.parts]);
+
+  // How each part looks given the simulation: glowing, sounding, running hot.
+  const live = useMemo(() => {
+    const out = new Map<string, PartLive>();
+    if (!sim.ok || sim.idle) return out;
+    for (const p of circuit.parts) {
+      const r = sim.parts.get(p.id);
+      const s = stressOf(p, r);
+      out.set(p.id, liveOf(p, r, !!s && s.level !== 'ok'));
+    }
+    return out;
+  }, [circuit.parts, sim]);
 
   // Start with the world origin in the middle of the canvas.
   useLayoutEffect(() => {
@@ -127,9 +168,9 @@ export function CircuitCanvas(props: Props) {
     [toLocal],
   );
 
-  const findPinNear = (w: Pt, exclude: PinRef | null): PinRef | null => {
+  const findPinNear = (w: Pt, exclude: PinRef | null, radius = PIN_SNAP_RADIUS): PinRef | null => {
     let best: PinRef | null = null;
-    let bestD = PIN_SNAP_RADIUS;
+    let bestD = radius;
     for (const p of circuitRef.current.parts) {
       PART_DEFS[p.kind].pins.forEach((_, i) => {
         const ref = { part: p.id, pin: i };
@@ -362,6 +403,41 @@ export function CircuitCanvas(props: Props) {
     }
   };
 
+  /* ---------- Multimeter probes ---------- */
+
+  const probeAt = (p: Probe): Pt | null => {
+    if ('at' in p) return p.at;
+    const part = partById.get(p.pin.part);
+    return part ? pinWorld(part, p.pin.pin) : null;
+  };
+
+  const onProbeDown = (e: RPointerEvent, color: ProbeColor) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    const tip = probeAt(meterRef.current[color]);
+    if (!tip) return;
+    const w = toWorld(e.clientX, e.clientY);
+    capture(e.pointerId);
+    gesture.current = { kind: 'probe', pointerId: e.pointerId, color, offset: { x: tip.x - w.x, y: tip.y - w.y } };
+  };
+
+  const toggleMeter = () => {
+    const m = meterRef.current;
+    if (m.open) {
+      onMeter({ ...m, open: false });
+      return;
+    }
+    // Park any loose probes in view, near the bottom right.
+    const r = svgRef.current!.getBoundingClientRect();
+    const park = (dx: number): Probe => ({ at: toWorld(r.right - dx, r.bottom - 110) });
+    onMeter({
+      ...m,
+      open: true,
+      red: probePin(circuitRef.current, m.red) ? m.red : park(70),
+      black: probePin(circuitRef.current, m.black) ? m.black : park(150),
+    });
+  };
+
   const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
     if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, toLocal(e.clientX, e.clientY));
     const g = gesture.current;
@@ -394,6 +470,14 @@ export function CircuitCanvas(props: Props) {
         edit((c) => moveParts(c, ids, dx, dy), !g.recorded);
         g.recorded = true;
         g.applied = { x: sx, y: sy };
+        return;
+      }
+      case 'probe': {
+        if (e.pointerId !== g.pointerId) return;
+        const w = toWorld(e.clientX, e.clientY);
+        const tip = { x: w.x + g.offset.x, y: w.y + g.offset.y };
+        const pin = findPinNear(tip, null, PROBE_SNAP_RADIUS);
+        onMeter({ ...meterRef.current, [g.color]: pin ? { pin } : { at: tip } });
         return;
       }
       case 'wire':
@@ -472,6 +556,7 @@ export function CircuitCanvas(props: Props) {
         onPointerCancel={(e) => endGesture(e, true)}
         onContextMenu={(e) => e.preventDefault()}
       >
+        <GlowDefs />
         <g transform={`translate(${vp.x} ${vp.y}) scale(${vp.k})`}>
           <g className="wires">
             {circuit.wires.map((w) => {
@@ -482,6 +567,7 @@ export function CircuitCanvas(props: Props) {
                 routeWire(pinWorld(pa, w.a.pin), pinWorldDir(pa, w.a.pin), pinWorld(pb, w.b.pin), pinWorldDir(pb, w.b.pin)),
               );
               const role = nets.role.get(pinKey(w.a)) ?? 'signal';
+              const amps = sim.ok && !sim.idle ? (sim.wires.get(w.id) ?? 0) : 0;
               return (
                 <g
                   key={w.id}
@@ -490,6 +576,7 @@ export function CircuitCanvas(props: Props) {
                 >
                   <path className="wire-hit" d={d} />
                   <path className="wire-line" d={d} />
+                  {showFlow && Math.abs(amps) >= FLOW_MIN && <path className="wire-flow" d={d} style={flowStyle(amps)} />}
                 </g>
               );
             })}
@@ -504,6 +591,7 @@ export function CircuitCanvas(props: Props) {
                 selected={selSet.has(p.id)}
                 wireCount={nets.wireCount}
                 targetKey={targetKey}
+                live={live.get(p.id)}
                 onPartDown={onPartDown}
                 onPinDown={onPinDown}
               />
@@ -515,6 +603,21 @@ export function CircuitCanvas(props: Props) {
               <PartLabel key={p.id} part={p} />
             ))}
           </g>
+          <g className="smokes">
+            {circuit.parts.map((p) => p.burn && <Smoke key={p.id} part={p} />)}
+          </g>
+          {meter.open && (
+            <g className="probes">
+              {(['black', 'red'] as const).map((color) => {
+                const at = probeAt(meter[color]);
+                return (
+                  at && (
+                    <ProbeMarker key={color} color={color} at={at} attached={!!probePin(circuit, meter[color])} onDown={onProbeDown} />
+                  )
+                );
+              })}
+            </g>
+          )}
         </g>
       </svg>
 
@@ -541,7 +644,18 @@ export function CircuitCanvas(props: Props) {
         </div>
       )}
 
-      <Toolbar {...props} zoom={vp.k} onZoomIn={() => zoomCenter(1.2)} onZoomOut={() => zoomCenter(1 / 1.2)} onFit={fitToContent} />
+      {props.children}
+
+      <Toolbar
+        {...props}
+        zoom={vp.k}
+        onZoomIn={() => zoomCenter(1.2)}
+        onZoomOut={() => zoomCenter(1 / 1.2)}
+        onFit={fitToContent}
+        showFlow={showFlow}
+        onToggleFlow={() => setShowFlow((f) => !f)}
+        onToggleMeter={toggleMeter}
+      />
     </main>
   );
 }
@@ -553,9 +667,29 @@ interface ToolbarProps extends Props {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
+  showFlow: boolean;
+  onToggleFlow: () => void;
+  onToggleMeter: () => void;
 }
 
-function Toolbar({ undo, redo, canUndo, canRedo, selection, circuit, onRotate, onDelete, zoom, onZoomIn, onZoomOut, onFit }: ToolbarProps) {
+function Toolbar({
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+  selection,
+  circuit,
+  onRotate,
+  onDelete,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onFit,
+  showFlow,
+  onToggleFlow,
+  meter,
+  onToggleMeter,
+}: ToolbarProps) {
   const hasPart = selection.some((id) => circuit.parts.some((p) => p.id === id));
   return (
     <div className="canvas-toolbar" role="toolbar" aria-label="Canvas tools">
@@ -571,6 +705,15 @@ function Toolbar({ undo, redo, canUndo, canRedo, selection, circuit, onRotate, o
       </ToolBtn>
       <ToolBtn label="Delete (Del)" disabled={selection.length === 0} onClick={onDelete}>
         <path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11" />
+      </ToolBtn>
+      <span className="tb-sep" />
+      <ToolBtn label={showFlow ? 'Hide current flow' : 'Show current flow'} pressed={showFlow} onClick={onToggleFlow}>
+        <path d="M2 10h3M8 10h4M15 10h3M14 7l3 3-3 3" />
+      </ToolBtn>
+      <ToolBtn label={meter.open ? 'Put the multimeter away' : 'Multimeter'} pressed={meter.open} onClick={onToggleMeter}>
+        <rect x="5" y="2.5" width="10" height="15" rx="2" />
+        <rect x="7" y="4.5" width="6" height="4" rx="0.8" />
+        <circle cx="10" cy="13" r="2" />
       </ToolBtn>
       <span className="tb-sep" />
       <ToolBtn label="Zoom out" onClick={onZoomOut}>
@@ -589,9 +732,28 @@ function Toolbar({ undo, redo, canUndo, canRedo, selection, circuit, onRotate, o
   );
 }
 
-function ToolBtn({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+function ToolBtn({
+  label,
+  disabled,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  pressed?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
-    <button className="tb-btn" aria-label={label} title={label} disabled={disabled} onClick={onClick}>
+    <button
+      className={`tb-btn${pressed ? ' on' : ''}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
       <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>

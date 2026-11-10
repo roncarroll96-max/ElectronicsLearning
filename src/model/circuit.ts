@@ -25,9 +25,23 @@ export interface Part {
   pos?: number;
   /** Light falling on a light sensor, 0 (dark) to 1 (bright). Default 0.5. */
   light?: number;
+  /** Set when the part was overloaded and burned out. A burned part conducts nothing. */
+  burn?: BurnInfo;
 }
 
-export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light'>>;
+/** What destroyed a part, kept so the app can explain it. */
+export interface BurnInfo {
+  quantity: 'current' | 'power' | 'reverse' | 'voltage';
+  /** The value that was measured, in A, W or V. */
+  value: number;
+  /** The part's continuous rating for that quantity. */
+  limit: number;
+  /** Pin voltages and pin currents at the moment it burned. */
+  v: number[];
+  i: number[];
+}
+
+export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'burn'>>;
 
 export interface PinRef {
   part: string;

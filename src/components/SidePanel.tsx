@@ -3,7 +3,7 @@ import { PART_DEFS, formatReading, formatValue } from '../model/parts';
 import type { SimResult } from '../sim/simulate';
 import type { EditFn } from '../state/useCircuit';
 import { PartIcon } from './PartIcon';
-import { PartControls, PartReadings, WireReading } from './Readings';
+import { PartControls, PartHealth, PartReadings, WireReading } from './Readings';
 import type { Mode } from './TopBar';
 
 const TRACKS = [
@@ -21,6 +21,8 @@ interface Props {
   edit: EditFn;
   pressed: ReadonlySet<string>;
   onPress: (id: string, down: boolean) => void;
+  supply: number;
+  onReplace: (id: string) => void;
   onRotate: () => void;
   onDelete: () => void;
 }
@@ -73,7 +75,7 @@ export function SidePanel({ mode, ...inspector }: Props) {
   );
 }
 
-function Inspector({ circuit, selection, sim, edit, pressed, onPress, onRotate, onDelete }: Omit<Props, 'mode'>) {
+function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: Omit<Props, 'mode'>) {
   if (selection.length === 0) {
     return (
       <div className="inspector-empty">
@@ -144,6 +146,7 @@ function Inspector({ circuit, selection, sim, edit, pressed, onPress, onRotate, 
         <dt>Rotation</dt>
         <dd className="mono">{part.rot}°</dd>
       </dl>
+      <PartHealth part={part} sim={sim} supply={supply} onReplace={() => onReplace(part.id)} />
       <PartControls part={part} edit={edit} pressed={pressed.has(part.id)} onPress={onPress} />
       <PartReadings part={part} sim={sim} circuit={circuit} />
       <div className="insp-section">Pins</div>

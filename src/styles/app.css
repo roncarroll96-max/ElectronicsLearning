@@ -1135,3 +1135,389 @@ kbd {
   width: 100%;
   accent-color: var(--accent);
 }
+
+/* ---------- Step 4: the circuit comes alive ---------- */
+
+/* Current flow: dots moving along the wire, faster with more current. */
+.wire-flow {
+  fill: none;
+  stroke: var(--flow);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0.001 15.999;
+  pointer-events: none;
+  animation-name: flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+.live-fx {
+  pointer-events: none;
+}
+
+.sound-waves path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  animation: sound 0.6s ease-in-out infinite alternate;
+}
+
+.sound-waves path:last-child {
+  animation-delay: 0.3s;
+}
+
+@keyframes sound {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Running above its rating. */
+.part-hot {
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 3;
+  animation: hot 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes hot {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Burned out: dark, scorched, and a puff of smoke. */
+.part.burned .body {
+  filter: grayscale(1) brightness(0.5);
+}
+
+.smoke {
+  pointer-events: none;
+}
+
+.smoke circle {
+  fill: #9ca3af;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: smoke 1.8s ease-out forwards;
+}
+
+.smoke circle:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.smoke circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes smoke {
+  0% {
+    opacity: 0.75;
+    transform: translateY(0) scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px) scale(2.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wire-flow,
+  .sound-waves path,
+  .part-hot {
+    animation: none;
+  }
+  .smoke {
+    display: none;
+  }
+}
+
+/* Toolbar toggles. */
+.tb-btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- Multimeter ---------- */
+.probe {
+  cursor: grab;
+}
+
+.probe-hit {
+  fill: transparent;
+}
+
+.probe-metal {
+  stroke: #c9ced6;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.probe-handle {
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.probe-collar {
+  stroke: #c9ced6;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.probe-red .probe-handle {
+  stroke: #e5484d;
+}
+
+.probe-black .probe-handle {
+  stroke: #2b2f36;
+}
+
+:root:not([data-theme='light']) .probe-black .probe-handle {
+  stroke: #4b515c;
+}
+
+.probe-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.probe-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.meter {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  width: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.meter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.meter-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.icon-x {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.icon-x:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.meter-display {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--lcd);
+  color: var(--lcd-text);
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  text-align: right;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.meter-display.tone-idle {
+  opacity: 0.55;
+}
+
+.meter-display.tone-warn {
+  color: var(--danger);
+}
+
+.meter-modes {
+  display: flex;
+}
+
+.meter-modes button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 4px;
+}
+
+.meter-sym {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.meter-name {
+  font-size: 10.5px;
+}
+
+.meter-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ---------- Burnout notice ---------- */
+.burn-notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(420px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border));
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  animation: notice-in 0.25s var(--ease);
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+.burn-notice p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.bn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bn-head strong {
+  flex: 1;
+  font-size: 14px;
+}
+
+.bn-icon {
+  fill: var(--danger);
+}
+
+.bn-fix {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text) !important;
+}
+
+.bn-fix-label,
+.insp-alert-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.bn-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Inspector alerts ---------- */
+.insp-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.insp-alert p {
+  margin: 0;
+}
+
+.insp-alert.danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.insp-alert.danger strong {
+  color: var(--danger);
+}
+
+.insp-alert.warn {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .meter {
+    top: auto;
+    bottom: 72px;
+    right: 8px;
+    width: 220px;
+  }
+}
