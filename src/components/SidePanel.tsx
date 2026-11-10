@@ -1,3 +1,6 @@
+import { pinKey, analyzeNets, type Circuit } from '../model/circuit';
+import { PART_DEFS, formatValue } from '../model/parts';
+import { PartIcon } from './PartIcon';
 import type { Mode } from './TopBar';
 
 const TRACKS = [
@@ -7,8 +10,16 @@ const TRACKS = [
   { name: 'Digital & Arduino', desc: 'Logic gates, then real Arduino code', lessons: 10, later: true },
 ];
 
-/** Right-hand panel: lesson guide in Learn mode, part inspector in Sandbox mode. */
-export function SidePanel({ mode }: { mode: Mode }) {
+interface Props {
+  mode: Mode;
+  circuit: Circuit;
+  selection: string[];
+  onRotate: () => void;
+  onDelete: () => void;
+}
+
+/** Right-hand panel: lesson tracks in Learn mode, part inspector in Sandbox mode. */
+export function SidePanel({ mode, circuit, selection, onRotate, onDelete }: Props) {
   return (
     <aside className="panel" aria-label={mode === 'learn' ? 'Lessons' : 'Inspector'}>
       {mode === 'learn' ? (
@@ -40,9 +51,7 @@ export function SidePanel({ mode }: { mode: Mode }) {
             <span className="panel-title">Inspector</span>
           </div>
           <div className="panel-body">
-            <div className="inspector-empty">
-              <p>Select a part to see its value, ratings, and why it’s there.</p>
-            </div>
+            <Inspector circuit={circuit} selection={selection} onRotate={onRotate} onDelete={onDelete} />
             <div className="callout">
               <span className="callout-label">Why this value?</span>
               <p>
@@ -54,5 +63,106 @@ export function SidePanel({ mode }: { mode: Mode }) {
         </>
       )}
     </aside>
+  );
+}
+
+function Inspector({ circuit, selection, onRotate, onDelete }: Omit<Props, 'mode'>) {
+  if (selection.length === 0) {
+    return (
+      <div className="inspector-empty">
+        <p>Select a part to see its value, ratings, and why it’s there.</p>
+      </div>
+    );
+  }
+
+  if (selection.length > 1) {
+    return (
+      <div className="inspector">
+        <div className="insp-head">
+          <span className="insp-title">{selection.length} items selected</span>
+        </div>
+        <InspectorActions onRotate={onRotate} onDelete={onDelete} />
+      </div>
+    );
+  }
+
+  const id = selection[0];
+  const wire = circuit.wires.find((w) => w.id === id);
+  if (wire) {
+    const name = (ref: { part: string; pin: number }) => {
+      const p = circuit.parts.find((x) => x.id === ref.part);
+      return p ? `${p.ref} · ${PART_DEFS[p.kind].pins[ref.pin].name}` : '?';
+    };
+    return (
+      <div className="inspector">
+        <div className="insp-head">
+          <span className="insp-title">Wire</span>
+        </div>
+        <dl className="insp-props">
+          <dt>From</dt>
+          <dd>{name(wire.a)}</dd>
+          <dt>To</dt>
+          <dd>{name(wire.b)}</dd>
+        </dl>
+        <InspectorActions onDelete={onDelete} />
+      </div>
+    );
+  }
+
+  const part = circuit.parts.find((p) => p.id === id);
+  if (!part) return null;
+  const def = PART_DEFS[part.kind];
+  const { wireCount } = analyzeNets(circuit);
+
+  return (
+    <div className="inspector">
+      <div className="insp-head">
+        <span className="insp-icon">
+          <PartIcon kind={part.kind} />
+        </span>
+        <div>
+          <span className="insp-title">{def.name}</span>
+          <span className="insp-ref">{part.ref}</span>
+        </div>
+      </div>
+      <dl className="insp-props">
+        {part.value !== undefined && def.unit && (
+          <>
+            <dt>Value</dt>
+            <dd className="mono">{formatValue(part.value, def.unit)}</dd>
+          </>
+        )}
+        <dt>Rotation</dt>
+        <dd className="mono">{part.rot}°</dd>
+      </dl>
+      <div className="insp-section">Pins</div>
+      <ul className="insp-pins">
+        {def.pins.map((pin, i) => {
+          const n = wireCount.get(pinKey({ part: part.id, pin: i })) ?? 0;
+          return (
+            <li key={i}>
+              <span>{pin.name}</span>
+              <span className={n ? 'pin-ok' : 'pin-open'}>{n === 0 ? 'not connected' : n === 1 ? '1 wire' : `${n} wires`}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <InspectorActions onRotate={onRotate} onDelete={onDelete} />
+    </div>
+  );
+}
+
+function InspectorActions({ onRotate, onDelete }: { onRotate?: () => void; onDelete: () => void }) {
+  return (
+    <div className="insp-actions">
+      {onRotate && (
+        <button className="btn" onClick={onRotate}>
+          Rotate <kbd>R</kbd>
+        </button>
+      )}
+      <button className="btn danger" onClick={onDelete}>
+        Delete <kbd>Del</kbd>
+      </button>
+    </div>
   );
 }

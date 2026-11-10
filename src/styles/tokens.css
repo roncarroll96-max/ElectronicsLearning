@@ -39,9 +39,18 @@
   --danger: #f87171;
 
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* Canvas drawing */
+  --symbol: #d5dae3;
+  --lead: #9ba3b1;
+  --bulb-glass: rgba(230, 236, 245, 0.12);
 }
 
 :root[data-theme='light'] {
+  --symbol: #262c38;
+  --lead: #7d8594;
+  --bulb-glass: rgba(120, 140, 170, 0.12);
+
   color-scheme: light;
 
   --bg: #eef0f4;

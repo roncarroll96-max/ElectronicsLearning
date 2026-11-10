@@ -2,21 +2,9 @@
  * Schematic-style icons for the parts tray. Drawn on a 40x24 box with
  * currentColor so they follow the theme.
  */
-export type PartKind =
-  | 'battery'
-  | 'resistor'
-  | 'potentiometer'
-  | 'led'
-  | 'lamp'
-  | 'switch'
-  | 'pushbutton'
-  | 'capacitor'
-  | 'diode'
-  | 'npn'
-  | 'ldr'
-  | 'buzzer'
-  | 'wire'
-  | 'ground';
+import type { PartKind as ModelKind } from '../model/parts';
+
+export type PartKind = ModelKind | 'wire';
 
 const common = {
   fill: 'none',

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { PartIcon, type PartKind } from './PartIcon';
+import { useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
+import type { PartKind } from '../model/parts';
+import { PartIcon } from './PartIcon';
 
 interface PartEntry {
   kind: PartKind;
@@ -12,7 +13,6 @@ interface PartGroup {
   parts: PartEntry[];
 }
 
-// The milestone 1 parts list. Dragging onto the canvas arrives in step 2.
 const GROUPS: PartGroup[] = [
   {
     title: 'Power',
@@ -54,7 +54,14 @@ const GROUPS: PartGroup[] = [
   },
 ];
 
-export function PartsTray() {
+interface Props {
+  /** Pointer pressed on a tile: the app decides whether it becomes a drag or a click. */
+  onTileDown: (kind: PartKind, e: RPointerEvent) => void;
+  /** Keyboard activation (Enter/Space) of a tile. */
+  onTileActivate: (kind: PartKind) => void;
+}
+
+export function PartsTray({ onTileDown, onTileActivate }: Props) {
   const [query, setQuery] = useState('');
 
   const groups = useMemo(() => {
@@ -85,7 +92,15 @@ export function PartsTray() {
             <ul className="tray-grid">
               {g.parts.map((p) => (
                 <li key={p.kind}>
-                  <button className="part-tile" title={`${p.name}: ${p.hint}`}>
+                  <button
+                    className="part-tile"
+                    title={`${p.name}: drag onto the canvas, or click to add`}
+                    onPointerDown={(e) => onTileDown(p.kind, e)}
+                    onClick={(e) => {
+                      // detail === 0 means keyboard activation; pointer clicks are handled on pointer up.
+                      if (e.detail === 0) onTileActivate(p.kind);
+                    }}
+                  >
                     <span className="part-icon">
                       <PartIcon kind={p.kind} />
                     </span>

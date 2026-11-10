@@ -284,8 +284,6 @@ p {
   position: absolute;
   inset: 0;
   background-image: radial-gradient(var(--grid-dot) 1.2px, transparent 1.2px);
-  background-size: 20px 20px;
-  background-position: 10px 10px;
 }
 
 .canvas-badge {
@@ -577,4 +575,472 @@ p {
   * {
     transition: none !important;
   }
+}
+
+/* ---------- Circuit drawing ---------- */
+.circuit-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.circuit-svg.panning {
+  cursor: grabbing;
+}
+
+.part {
+  cursor: grab;
+}
+
+.panning .part,
+.wiring .part {
+  cursor: inherit;
+}
+
+.part-hit {
+  fill: transparent;
+}
+
+.part-sel {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.sym {
+  fill: none;
+  stroke: var(--symbol);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sym.thin {
+  stroke-width: 1.4;
+}
+
+.sym.fill {
+  fill: var(--symbol);
+}
+
+.sym.ground {
+  stroke: var(--sig-ground);
+}
+
+.sym-dot {
+  fill: var(--symbol);
+}
+
+.lead {
+  fill: none;
+  stroke: var(--lead);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bulb-glass {
+  fill: var(--bulb-glass);
+  stroke: var(--lead);
+  stroke-width: 1.5;
+}
+
+.batt-text {
+  font: 700 13px var(--font-sans);
+  fill: #f4f5f7;
+  text-anchor: middle;
+}
+
+.batt-sign {
+  font: 800 14px var(--font-sans);
+  fill: #1d2129;
+  text-anchor: middle;
+}
+
+.npn-text {
+  font: 700 6.5px var(--font-sans);
+  fill: #9aa1ad;
+  text-anchor: middle;
+  letter-spacing: 0.04em;
+}
+
+/* Pins: visible on hover, when selected, and while wiring */
+.pin {
+  cursor: crosshair;
+}
+
+.pin-hit {
+  fill: transparent;
+}
+
+.pin-dot {
+  fill: var(--canvas);
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.pin-dot.connected {
+  fill: var(--symbol);
+  stroke: none;
+  opacity: 1;
+}
+
+.view-realistic .pin-dot.connected {
+  fill: var(--lead);
+}
+
+.part:hover .pin-dot,
+.part.selected .pin-dot,
+.wiring .pin-dot {
+  opacity: 1;
+}
+
+.pin:hover .pin-dot:not(.connected) {
+  fill: var(--accent);
+}
+
+.pin-dot.target {
+  fill: var(--accent);
+  stroke: var(--accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+/* Wires */
+.wire {
+  cursor: pointer;
+}
+
+.wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+}
+
+.wire-line {
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-width var(--dur) var(--ease);
+}
+
+.view-schematic .wire-line {
+  stroke-width: 2;
+}
+
+.role-power .wire-line {
+  stroke: var(--sig-power);
+}
+
+.role-ground .wire-line {
+  stroke: var(--sig-ground);
+}
+
+.role-signal .wire-line {
+  stroke: var(--sig-analog);
+}
+
+.wire:hover .wire-line {
+  stroke-width: 3.6;
+}
+
+.wire.selected .wire-line {
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+
+.draft-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-dasharray: 7 5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.part-label {
+  font: 500 11px var(--font-sans);
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+.part-label .ref {
+  font-weight: 650;
+  fill: var(--text-faint);
+}
+
+/* ---------- Canvas overlays ---------- */
+.empty-state {
+  pointer-events: none;
+}
+
+.canvas-badge,
+.canvas-hint {
+  pointer-events: none;
+}
+
+.canvas-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.canvas-toolbar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.tb-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.tb-btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.tb-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tb-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.zoom-readout {
+  min-width: 52px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.zoom-readout:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* Part being dragged in from the tray */
+.drag-ghost {
+  position: fixed;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  padding: 10px 12px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.dragging-part,
+.dragging-part * {
+  cursor: grabbing !important;
+}
+
+.part-tile {
+  touch-action: pan-y;
+}
+
+.status-count {
+  margin-left: 10px;
+  color: var(--text-faint);
+}
+
+/* ---------- Inspector ---------- */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.insp-head > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.insp-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.insp-title {
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.insp-ref {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.insp-props {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.insp-props dt {
+  color: var(--text-muted);
+}
+
+.insp-props dd {
+  margin: 0;
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.insp-section {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.insp-pins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.insp-pins li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pin-ok {
+  color: var(--ok);
+  font-size: 12px;
+}
+
+.pin-open {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.insp-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  font-weight: 550;
+  font-size: 13px;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+@media (max-width: 720px) {
+  .canvas-toolbar .tb-sep:nth-of-type(2),
+  .canvas-toolbar [aria-label='Fit to screen'] {
+    display: none;
+  }
+}
+
+.part-mark {
+  font: 600 13px var(--font-sans);
+  fill: var(--symbol);
+  pointer-events: none;
 }
