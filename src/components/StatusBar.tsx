@@ -6,7 +6,7 @@ const STATUS_TEXT: Record<SimStatus, string> = {
   failed: 'Can’t solve this circuit',
 };
 
-export function StatusBar({ parts, wires, status }: { parts: number; wires: number; status: SimStatus }) {
+export function StatusBar({ parts, wires, status, storageOk }: { parts: number; wires: number; status: SimStatus; storageOk: boolean }) {
   return (
     <footer className="statusbar">
       <span className="status-item" role="status">
@@ -22,7 +22,15 @@ export function StatusBar({ parts, wires, status }: { parts: number; wires: numb
         <span><i style={{ background: 'var(--sig-analog)' }} />Analog</span>
         <span><i style={{ background: 'var(--sig-digital)' }} />Digital</span>
       </span>
-      <span className="status-item faint">v0.6 · Step 6</span>
+      {storageOk ? (
+        <span className="status-item faint" title="Your work and progress are saved in this browser as you go">
+          Saved in this browser · v0.7
+        </span>
+      ) : (
+        <span className="status-item warn" role="alert" title="Export your circuit from My circuits to keep it">
+          Not saving: browser storage unavailable
+        </span>
+      )}
     </footer>
   );
 }

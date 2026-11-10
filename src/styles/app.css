@@ -1039,10 +1039,39 @@ kbd {
   }
 }
 
-.part-mark {
-  font: 600 13px var(--font-sans);
-  fill: var(--symbol);
+/* Short pin labels (+ −, A W B, B C E): always shown, never in the way of clicks. */
+.pin-label {
+  font: 650 10px var(--font-sans);
+  fill: var(--text-muted);
   pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.pin-label.sign {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--symbol);
+}
+
+/* A pin's full name, shown while hovering it or wiring to it. */
+.pin-name {
+  font: 600 11px var(--font-sans);
+  fill: var(--accent);
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.pin:hover .pin-name,
+.pin:has(.pin-dot.target) .pin-name {
+  opacity: 1;
 }
 
 /* ---------- Simulator status and live readings ---------- */
@@ -2146,5 +2175,286 @@ kbd {
   .part-tile.pulse,
   .welcome {
     animation: none;
+  }
+}
+
+/* ---------- Step 7: My circuits, saving ---------- */
+
+.btn.circuits-btn {
+  flex: none;
+  padding: 6px 12px;
+  background: var(--surface-2);
+}
+
+.btn.circuits-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-item.warn {
+  color: var(--warn);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.circuits-menu {
+  position: fixed;
+  top: calc(var(--topbar-h) + 6px);
+  right: 12px;
+  z-index: 40;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--topbar-h) - 24px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.cm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cm-head .icon-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cm-section + .cm-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.cm-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.cm-current,
+.cm-saveas,
+.cm-rename {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cm-current .cm-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.cm-current .btn,
+.cm-saveas .btn,
+.cm-rename .btn {
+  flex: none;
+}
+
+.cm-saveas input,
+.cm-rename input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cm-saveas input:focus,
+.cm-rename input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border-strong);
+}
+
+.cm-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.cm-msg {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.cm-msg.ok {
+  color: var(--ok);
+}
+
+.cm-msg.warn,
+.cm-warn {
+  color: var(--warn);
+}
+
+.cm-warn {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+}
+
+.cm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cm-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.cm-list li.current {
+  border-color: var(--accent);
+}
+
+.cm-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.cm-open:hover .cm-name {
+  color: var(--accent);
+}
+
+.cm-open .cm-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.cm-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.cm-small {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.cm-small:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.cm-small.danger:hover {
+  color: var(--danger);
+}
+
+.cm-confirm {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  font-size: 12.5px;
+}
+
+.cm-confirm span {
+  flex: 1 1 100%;
+}
+
+.cm-confirm .btn {
+  flex: none;
+  padding: 5px 12px;
+}
+
+.cm-files {
+  display: flex;
+  gap: 8px;
+}
+
+.continue-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.continue-card:hover {
+  border-color: var(--accent-strong);
+}
+
+.continue-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.continue-title {
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.continue-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .circuits-label {
+    display: none;
   }
 }

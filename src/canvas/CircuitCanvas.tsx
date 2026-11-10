@@ -33,7 +33,7 @@ import { probePin, type MeterState, type Probe } from '../meter/meter';
 import { stressOf } from '../sim/ratings';
 import type { SimResult } from '../sim/simulate';
 import { GlowDefs, liveOf, Smoke, type PartLive } from './LiveFx';
-import { PartLabel, PartMarks, PartShape } from './PartShape';
+import { PartLabel, PartShape, PinLabels } from './PartShape';
 import { ProbeMarker, type ProbeColor } from './Probes';
 import { roundedPath, routeWire } from './wirePath';
 
@@ -604,7 +604,9 @@ export function CircuitCanvas(props: Props) {
             ))}
           </g>
           <g className="labels">
-            {view === 'schematic' && circuit.parts.map((p) => <PartMarks key={`m${p.id}`} part={p} />)}
+            {circuit.parts.map((p) => (
+              <PinLabels key={`m${p.id}`} part={p} view={view} />
+            ))}
             {circuit.parts.map((p) => (
               <PartLabel key={p.id} part={p} />
             ))}

@@ -11,9 +11,11 @@ interface Props {
   theme: Theme;
   onToggleTheme: () => void;
   onTogglePanels: () => void;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
 }
 
-export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels }: Props) {
+export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu }: Props) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -49,6 +51,12 @@ export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTog
       </nav>
 
       <div className="topbar-right">
+        <button className={`btn circuits-btn${menuOpen ? ' on' : ''}`} onClick={onToggleMenu} aria-expanded={menuOpen} aria-haspopup="dialog">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" />
+          </svg>
+          <span className="circuits-label">My circuits</span>
+        </button>
         <div className="segmented small" role="group" aria-label="Canvas view">
           <button className={view === 'realistic' ? 'on' : ''} onClick={() => onView('realistic')}>
             Realistic

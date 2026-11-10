@@ -14,23 +14,57 @@ import { topology } from './learn/topology';
 import { hasBeenWelcomed, markWelcomed, Welcome, type WelcomeChoice } from './components/Welcome';
 import { MeterPanel } from './meter/MeterPanel';
 import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterState } from './meter/meter';
-import { deleteItems, EMPTY_CIRCUIT, rotateParts, updatePart, type Circuit } from './model/circuit';
+import { deleteItems, EMPTY_CIRCUIT, newId, rotateParts, updatePart, type Circuit } from './model/circuit';
 import type { PartKind } from './model/parts';
 import { worstBurnout } from './sim/ratings';
 import { simulate } from './sim/simulate';
 import { useCircuit } from './state/useCircuit';
 import { useTheme } from './state/theme';
+import {
+  loadProgress,
+  loadSaved,
+  loadSession,
+  loadWorkspaces,
+  saveProgress,
+  saveSaved,
+  saveSession,
+  saveWorkspaces,
+  storageAvailable,
+  type SavedCircuit,
+} from './state/storage';
+import { circuitToFile, fileNameFor, parseCircuitFile } from './model/circuitFile';
+import { CircuitsMenu, type CircuitsMenuApi } from './components/CircuitsMenu';
+
+/** Everything remembered from the last visit, read once at start-up. */
+function restore() {
+  const session = loadSession();
+  const lessonId = session.lessonId && lessonById(session.lessonId) ? session.lessonId : null;
+  const workspaces = loadWorkspaces();
+  const workspace = session.mode === 'learn' && lessonId ? `lesson:${lessonId}` : 'sandbox';
+  const circuit =
+    workspaces.get(workspace) ?? (lessonId && workspace !== 'sandbox' ? lessonById(lessonId)?.starter?.() : undefined) ?? EMPTY_CIRCUIT;
+  return {
+    session: { ...session, lessonId },
+    workspaces,
+    workspace,
+    circuit,
+    progress: loadProgress(),
+    saved: loadSaved(),
+    storageOk: storageAvailable(),
+  };
+}
 
 const DRAG_THRESHOLD = 6;
 
 export function App() {
   const { theme, toggle } = useTheme();
-  const [mode, setMode] = useState<Mode>('learn');
-  const [view, setView] = useState<View>('realistic');
+  const [boot] = useState(restore);
+  const [mode, setMode] = useState<Mode>(boot.session.mode);
+  const [view, setView] = useState<View>(boot.session.view);
   // On narrow screens (tablets in portrait) the side panels slide over the canvas.
   const [panelsOpen, setPanelsOpen] = useState(false);
 
-  const { circuit, edit, undo, redo, load, canUndo, canRedo } = useCircuit();
+  const { circuit, edit, undo, redo, load, canUndo, canRedo } = useCircuit(boot.circuit);
   const [rawSelection, setSelection] = useState<string[]>([]);
   const canvasApi = useRef<CanvasApi | null>(null);
   const [ghost, setGhost] = useState<{ kind: PartKind; x: number; y: number } | null>(null);
@@ -65,20 +99,26 @@ export function App() {
 
   /* ---------- Lessons ---------- */
   const [welcome, setWelcome] = useState(() => !hasBeenWelcomed());
-  const [lessonId, setLessonId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<Record<string, string[]>>({});
-  const [completed, setCompleted] = useState<ReadonlySet<string>>(() => new Set());
+  const [lessonId, setLessonId] = useState<string | null>(boot.session.lessonId);
+  const [lastLessonId, setLastLessonId] = useState<string | null>(boot.session.lastLessonId);
+  const [progress, setProgress] = useState<Record<string, string[]>>(boot.progress.steps);
+  const [completed, setCompleted] = useState<ReadonlySet<string>>(() => new Set(boot.progress.completed));
   const lesson = lessonId ? lessonById(lessonId) : undefined;
 
   // The sandbox and each lesson have their own circuit. Switching puts the current one aside.
   const workspace = mode === 'learn' && lessonId ? `lesson:${lessonId}` : 'sandbox';
-  const [activeWorkspace, setActiveWorkspace] = useState('sandbox');
-  const stash = useRef(new Map<string, Circuit>());
+  const [activeWorkspace, setActiveWorkspace] = useState(boot.workspace);
+  const stash = useRef(boot.workspaces);
+  // A saved or imported circuit waiting to open once the sandbox is showing.
+  const pendingOpen = useRef<Circuit | null>(null);
   const switchTo = useCallback(
     (key: string, fresh = false) => {
       const lessonFor = key.startsWith('lesson:') ? lessonById(key.slice(7)) : undefined;
       const saved = fresh ? undefined : stash.current.get(key);
-      load(saved ?? lessonFor?.starter?.() ?? EMPTY_CIRCUIT);
+      const opening = key === 'sandbox' ? pendingOpen.current : null;
+      pendingOpen.current = null;
+      if (opening) load(opening, saved);
+      else load(saved ?? lessonFor?.starter?.() ?? EMPTY_CIRCUIT);
       setActiveWorkspace(key);
       setSelection([]);
       setPressed(new Set());
@@ -109,6 +149,7 @@ export function App() {
   const openLesson = useCallback((id: string) => {
     setMode('learn');
     setLessonId(id);
+    setLastLessonId(id);
   }, []);
   const restartLesson = useCallback(() => {
     if (!lesson) return;
@@ -129,6 +170,112 @@ export function App() {
     },
     [openLesson],
   );
+
+  /* ---------- Remembering everything (this browser only) ---------- */
+  const [storageOk, setStorageOk] = useState(boot.storageOk);
+  const [sandboxSaveId, setSandboxSaveId] = useState<string | null>(boot.session.sandboxSaveId);
+
+  // Autosave the circuit on screen a moment after each change, and everything on leaving the page.
+  useEffect(() => {
+    stash.current.set(activeWorkspace, circuit);
+    const t = window.setTimeout(() => setStorageOk(saveWorkspaces(stash.current)), 400);
+    return () => window.clearTimeout(t);
+  }, [circuit, activeWorkspace]);
+  useEffect(() => {
+    const flush = () => saveWorkspaces(stash.current);
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+  useEffect(() => {
+    setStorageOk(saveProgress({ steps: progress, completed: [...completed] }));
+  }, [progress, completed]);
+  useEffect(() => {
+    setStorageOk(saveSession({ mode, view, lessonId, lastLessonId, sandboxSaveId }));
+  }, [mode, view, lessonId, lastLessonId, sandboxSaveId]);
+
+  /* ---------- Named saves, export and import ---------- */
+  const [saved, setSaved] = useState<SavedCircuit[]>(boot.saved);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const inSandbox = activeWorkspace === 'sandbox';
+  const sandboxSave = inSandbox && sandboxSaveId ? saved.find((s) => s.id === sandboxSaveId) : undefined;
+  const circuitName = lessonActive && lesson ? lesson.title : (sandboxSave?.name ?? 'My circuit');
+
+  /** Writes the list; on failure keeps the old one and says why. */
+  const storeSaved = useCallback(
+    (list: SavedCircuit[]): string | null => {
+      if (!saveSaved(list)) {
+        setStorageOk(storageAvailable());
+        return 'Couldn’t save: this browser isn’t letting Circuit Lab store anything (it may be full, or blocked in a private window). Export to a file instead.';
+      }
+      setSaved(list);
+      return null;
+    },
+    [],
+  );
+
+  /** Opens a circuit in the sandbox. Whatever was there is one Ctrl+Z away. */
+  const openInSandbox = useCallback(
+    (c: Circuit, saveId: string | null) => {
+      setSandboxSaveId(saveId);
+      setMode('sandbox');
+      if (activeWorkspace === 'sandbox') {
+        load(c, circuit);
+        setSelection([]);
+        setBurnNotice(null);
+        window.setTimeout(() => canvasApi.current?.fit(), 30);
+      } else {
+        pendingOpen.current = c;
+      }
+    },
+    [activeWorkspace, circuit, load],
+  );
+
+  const menu: CircuitsMenuApi = {
+    saved,
+    storageOk,
+    inSandbox,
+    lessonTitle: lessonActive && lesson ? lesson.title : undefined,
+    currentName: circuitName,
+    currentSaveId: sandboxSave?.id,
+    empty: circuit.parts.length === 0,
+    saveAs: (name) => {
+      const entry: SavedCircuit = { id: newId('s'), name, savedAt: new Date().toISOString(), circuit };
+      const err = storeSaved([entry, ...saved]);
+      if (!err && inSandbox) setSandboxSaveId(entry.id);
+      return err;
+    },
+    saveOver: (id) =>
+      storeSaved(saved.map((s) => (s.id === id ? { ...s, circuit, savedAt: new Date().toISOString() } : s))),
+    open: (id) => {
+      const s = saved.find((x) => x.id === id);
+      if (s) openInSandbox(s.circuit, s.id);
+      setMenuOpen(false);
+    },
+    rename: (id, name) => storeSaved(saved.map((s) => (s.id === id ? { ...s, name } : s))),
+    remove: (id) => {
+      const err = storeSaved(saved.filter((s) => s.id !== id));
+      if (!err && sandboxSaveId === id) setSandboxSaveId(null);
+      return err;
+    },
+    exportFile: () => {
+      const blob = new Blob([circuitToFile(circuit, circuitName)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileNameFor(circuitName);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+    importText: (text) => {
+      const r = parseCircuitFile(text);
+      if (!r.ok) return { error: r.error };
+      openInSandbox(r.value.circuit, null);
+      setMenuOpen(false);
+      return { name: r.value.name };
+    },
+  };
 
   /* ---------- Burnouts ---------- */
   const [burnNotice, setBurnNotice] = useState<string | null>(null);
@@ -269,7 +416,10 @@ export function App() {
         theme={theme}
         onToggleTheme={toggle}
         onTogglePanels={() => setPanelsOpen((o) => !o)}
+        menuOpen={menuOpen}
+        onToggleMenu={() => setMenuOpen((o) => !o)}
       />
+      {menuOpen && <CircuitsMenu api={menu} onClose={() => setMenuOpen(false)} />}
       <div className="workspace">
         <PartsTray onTileDown={onTileDown} onTileActivate={onTileActivate} highlight={trayHint} />
         <CircuitCanvas
@@ -318,6 +468,8 @@ export function App() {
             done,
             completed,
             next,
+            continueLesson: !lesson && lastLessonId ? lessonById(lastLessonId) : undefined,
+            progress,
             onOpen: openLesson,
             onBack: () => setLessonId(null),
             onRestart: restartLesson,
@@ -336,7 +488,7 @@ export function App() {
         />
         <button className="scrim" aria-label="Close panels" onClick={() => setPanelsOpen(false)} />
       </div>
-      <StatusBar parts={circuit.parts.length} wires={circuit.wires.length} status={simStatus} />
+      <StatusBar parts={circuit.parts.length} wires={circuit.wires.length} status={simStatus} storageOk={storageOk} />
       {ghost && (
         <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }} aria-hidden="true">
           <PartIcon kind={ghost.kind} />

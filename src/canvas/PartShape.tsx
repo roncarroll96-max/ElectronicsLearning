@@ -1,6 +1,6 @@
 import type { PointerEvent as RPointerEvent } from 'react';
 import { pinKey, type Part, type PinRef } from '../model/circuit';
-import { PART_DEFS, formatValue, rotatePoint, rotatedBounds } from '../model/parts';
+import { DIR_VEC, PART_DEFS, formatValue, rotateDir, rotatePoint, rotatedBounds, type Dir } from '../model/parts';
 import type { View } from '../components/TopBar';
 import { RealisticBody, SchematicBody } from './PartBodies';
 import { PartGlow, Scorch, type PartLive } from './LiveFx';
@@ -38,7 +38,6 @@ export function PartShape({ part, view, selected, wireCount, targetKey, live, fo
         const connected = (wireCount.get(key) ?? 0) > 0;
         return (
           <g key={i} className="pin" onPointerDown={(e) => onPinDown(e, { part: part.id, pin: i })}>
-            <title>{`${part.ref || def.name}: ${pin.name}`}</title>
             <circle className="pin-hit" cx={pin.x} cy={pin.y} r="10" />
             <circle
               className={`pin-dot${connected ? ' connected' : ''}${targetKey === key ? ' target' : ''}`}
@@ -46,6 +45,7 @@ export function PartShape({ part, view, selected, wireCount, targetKey, live, fo
               cy={pin.y}
               r={targetKey === key ? 6 : connected ? 3 : 4}
             />
+            <PinName name={pin.name} x={pin.x} y={pin.y} dir={rotateDir(pin.dir, part.rot)} rot={part.rot} />
           </g>
         );
       })}
@@ -53,25 +53,59 @@ export function PartShape({ part, view, selected, wireCount, targetKey, live, fo
   );
 }
 
-/** Polarity signs for the schematic symbols, positioned with the part but never rotated. */
-const MARKS: Partial<Record<Part['kind'], { text: string; x: number; y: number }[]>> = {
-  battery: [
-    { text: '+', x: -16, y: -14 },
-    { text: '−', x: 16, y: -14 },
-  ],
-  capacitor: [{ text: '+', x: -13, y: -14 }],
+/** The pin's full name, shown beside it while the pointer is over it. Counter-rotated to stay upright. */
+function PinName({ name, x, y, dir, rot }: { name: string; x: number; y: number; dir: Dir; rot: number }) {
+  const at = { l: { x: -12, y: 4, a: 'end' }, r: { x: 12, y: 4, a: 'start' }, u: { x: 0, y: -12, a: 'middle' }, d: { x: 0, y: 20, a: 'middle' } }[dir];
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${-rot})`}>
+      <text className="pin-name" x={at.x} y={at.y} textAnchor={at.a}>
+        {name}
+      </text>
+    </g>
+  );
+}
+
+/**
+ * Short pin labels for parts where it matters which way round they go:
+ * + and − for polarized parts, A/W/B for a potentiometer, B/C/E for a transistor.
+ * Drawn beside each lead, near the body, and always upright.
+ */
+const PIN_LABELS: Partial<Record<Part['kind'], string[]>> = {
+  led: ['+', '−'],
+  diode: ['+', '−'],
+  buzzer: ['+', '−'],
+  capacitor: ['+', '−'],
+  battery: ['+', '−'],
+  potentiometer: ['A', 'B', 'W'],
+  npn: ['B', 'C', 'E'],
 };
 
-export function PartMarks({ part }: { part: Part }) {
-  const marks = MARKS[part.kind];
-  if (!marks) return null;
+export function PinLabels({ part, view }: { part: Part; view: View }) {
+  const labels = PIN_LABELS[part.kind];
+  // The realistic battery already has its + printed on it.
+  if (!labels || (part.kind === 'battery' && view === 'realistic')) return null;
+  const pins = PART_DEFS[part.kind].pins;
   return (
     <>
-      {marks.map((m) => {
-        const p = rotatePoint(m.x, m.y, part.rot);
+      {labels.map((text, i) => {
+        const pin = pins[i];
+        const v = DIR_VEC[pin.dir];
+        // A little in from the pin, along the lead, and off to one side of it.
+        // Vertical leads sit closer to the body, clear of the reference/value label.
+        const side = v.x !== 0 ? { x: 0, y: -9 } : { x: 9, y: 0 };
+        const inset = v.x !== 0 ? 12 : 20;
+        const local = { x: pin.x - v.x * inset + side.x, y: pin.y - v.y * inset + side.y };
+        const p = rotatePoint(local.x, local.y, part.rot);
+        const sign = text === '+' || text === '−';
         return (
-          <text key={m.text} className="part-mark" x={part.x + p.x} y={part.y + p.y + 4.5} textAnchor="middle">
-            {m.text}
+          <text
+            key={i}
+            className={`pin-label${sign ? ' sign' : ''}`}
+            x={part.x + p.x}
+            y={part.y + p.y + (sign ? 4.5 : 3.5)}
+            textAnchor="middle"
+          >
+            {text}
           </text>
         );
       })}

@@ -15,6 +15,9 @@ export interface LessonProps {
   done: readonly string[];
   completed: ReadonlySet<string>;
   next?: Lesson;
+  /** The lesson worked on most recently, offered as "Continue" on the track list. */
+  continueLesson?: Lesson;
+  progress: Record<string, string[]>;
   onOpen: (id: string) => void;
   onBack: () => void;
   onRestart: () => void;
@@ -48,7 +51,7 @@ export function SidePanel({ mode, learn, ...inspector }: Props) {
           <span className="panel-title">Lessons</span>
         </div>
         <div className="panel-body">
-          <TrackList completed={learn.completed} onOpen={learn.onOpen} />
+          <TrackList completed={learn.completed} onOpen={learn.onOpen} continueLesson={learn.continueLesson} progress={learn.progress} />
         </div>
       </aside>
     );

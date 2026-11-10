@@ -1,11 +1,31 @@
 import { useState } from 'react';
-import { TRACKS, type Lesson, type Step } from '../learn/lessons';
+import { allSteps, TRACKS, type Lesson, type Step } from '../learn/lessons';
 import { currentStep, isComplete } from '../learn/lessons/progress';
 
 /** The list of tracks and their lessons (Learn mode, no lesson open). */
-export function TrackList({ completed, onOpen }: { completed: ReadonlySet<string>; onOpen: (id: string) => void }) {
+export function TrackList({
+  completed,
+  onOpen,
+  continueLesson,
+  progress,
+}: {
+  completed: ReadonlySet<string>;
+  onOpen: (id: string) => void;
+  continueLesson?: Lesson;
+  progress: Record<string, string[]>;
+}) {
+  const resume = continueLesson && !isComplete(continueLesson, progress[continueLesson.id] ?? []) ? continueLesson : undefined;
   return (
     <div className="track-list">
+      {resume && (
+        <button className="continue-card" onClick={() => onOpen(resume.id)}>
+          <span className="continue-kicker">Continue where you left off</span>
+          <span className="continue-title">{resume.title}</span>
+          <span className="continue-meta">
+            {(progress[resume.id] ?? []).length} of {allSteps(resume).length} steps done
+          </span>
+        </button>
+      )}
       {TRACKS.map((t, ti) => {
         const done = t.lessons.filter((l) => completed.has(l.id)).length;
         return (

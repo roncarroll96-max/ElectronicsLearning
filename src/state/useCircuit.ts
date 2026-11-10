@@ -20,7 +20,7 @@ type Action =
   | { type: 'edit'; recipe: (c: Circuit) => Circuit; record: boolean }
   | { type: 'undo' }
   | { type: 'redo' }
-  | { type: 'load'; circuit: Circuit };
+  | { type: 'load'; circuit: Circuit; previous?: Circuit };
 
 function reducer(h: History, a: Action): History {
   switch (a.type) {
@@ -36,7 +36,8 @@ function reducer(h: History, a: Action): History {
     }
     case 'load':
       // A different circuit (switching between the sandbox and a lesson): fresh history.
-      return { past: [], present: a.circuit, future: [] };
+      // Opening a saved circuit over existing work keeps that work one undo away.
+      return { past: a.previous && a.previous.parts.length ? [a.previous] : [], present: a.circuit, future: [] };
     case 'redo': {
       if (h.future.length === 0) return h;
       return { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) };
@@ -46,13 +47,14 @@ function reducer(h: History, a: Action): History {
 
 export type EditFn = (recipe: (c: Circuit) => Circuit, record?: boolean) => void;
 
-export function useCircuit() {
-  const [h, dispatch] = useReducer(reducer, { past: [], present: EMPTY_CIRCUIT, future: [] });
+export function useCircuit(initial: Circuit = EMPTY_CIRCUIT) {
+  const [h, dispatch] = useReducer(reducer, { past: [], present: initial, future: [] });
 
   const edit = useCallback<EditFn>((recipe, record = true) => dispatch({ type: 'edit', recipe, record }), []);
   const undo = useCallback(() => dispatch({ type: 'undo' }), []);
   const redo = useCallback(() => dispatch({ type: 'redo' }), []);
-  const load = useCallback((circuit: Circuit) => dispatch({ type: 'load', circuit }), []);
+  /** Replaces the circuit with a fresh history; `previous` (if given) stays one undo away. */
+  const load = useCallback((circuit: Circuit, previous?: Circuit) => dispatch({ type: 'load', circuit, previous }), []);
 
   return {
     circuit: h.present,
