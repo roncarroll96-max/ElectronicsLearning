@@ -137,6 +137,20 @@ export function updatePart(c: Circuit, id: string, patch: PartPatch): Circuit {
   return { ...c, parts: c.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
 }
 
+/**
+ * Turns a two-pin part around: it rotates 180° and its wires swap ends, so
+ * every wire stays where it was on screen but now meets the other pin.
+ */
+export function flipPart(c: Circuit, id: string): Circuit {
+  const part = c.parts.find((p) => p.id === id);
+  if (!part || PART_DEFS[part.kind].pins.length !== 2) return c;
+  const swap = (r: PinRef): PinRef => (r.part === id ? { part: id, pin: 1 - r.pin } : r);
+  return {
+    parts: c.parts.map((p) => (p.id === id ? { ...p, rot: ((p.rot + 180) % 360) as Rotation } : p)),
+    wires: c.wires.map((w) => (w.a.part === id || w.b.part === id ? { ...w, a: swap(w.a), b: swap(w.b) } : w)),
+  };
+}
+
 export function canConnect(c: Circuit, a: PinRef, b: PinRef): boolean {
   if (samePin(a, b)) return false;
   return !c.wires.some((w) => (samePin(w.a, a) && samePin(w.b, b)) || (samePin(w.a, b) && samePin(w.b, a)));

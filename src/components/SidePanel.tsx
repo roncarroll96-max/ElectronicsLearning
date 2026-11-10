@@ -1,9 +1,11 @@
 import { pinKey, analyzeNets, type Circuit } from '../model/circuit';
-import { PART_DEFS, formatReading, formatValue } from '../model/parts';
+import { PART_DEFS, formatReading } from '../model/parts';
 import type { SimResult } from '../sim/simulate';
 import type { EditFn } from '../state/useCircuit';
 import { PartIcon } from './PartIcon';
 import { PartControls, PartHealth, PartReadings, WireReading } from './Readings';
+import { ValueEditor } from './ValueEditor';
+import { WhyPanel } from './WhyPanel';
 import type { Mode } from './TopBar';
 
 const TRACKS = [
@@ -61,13 +63,7 @@ export function SidePanel({ mode, ...inspector }: Props) {
           </div>
           <div className="panel-body">
             <Inspector {...inspector} />
-            <div className="callout">
-              <span className="callout-label">Why this value?</span>
-              <p>
-                Every part will explain the goal, the reasoning, and the choice. Plain English
-                first, with the math one click away.
-              </p>
-            </div>
+            <WhyPanel circuit={inspector.circuit} sim={inspector.sim} selection={inspector.selection} />
           </div>
         </>
       )}
@@ -137,15 +133,10 @@ function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, on
         </div>
       </div>
       <dl className="insp-props">
-        {part.value !== undefined && def.unit && (
-          <>
-            <dt>Value</dt>
-            <dd className="mono">{formatValue(part.value, def.unit)}</dd>
-          </>
-        )}
         <dt>Rotation</dt>
         <dd className="mono">{part.rot}°</dd>
       </dl>
+      <ValueEditor part={part} edit={edit} />
       <PartHealth part={part} sim={sim} supply={supply} onReplace={() => onReplace(part.id)} />
       <PartControls part={part} edit={edit} pressed={pressed.has(part.id)} onPress={onPress} />
       <PartReadings part={part} sim={sim} circuit={circuit} />

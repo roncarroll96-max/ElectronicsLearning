@@ -62,6 +62,8 @@ interface Props {
   sim: SimResult;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
+  /** Parts and pins to point at ("where to look"). */
+  focus?: { parts: string[]; pins: PinRef[] };
   /** Overlays drawn on top of the canvas (meter panel, notices). */
   children?: ReactNode;
 }
@@ -110,7 +112,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -592,6 +594,7 @@ export function CircuitCanvas(props: Props) {
                 wireCount={nets.wireCount}
                 targetKey={targetKey}
                 live={live.get(p.id)}
+                focused={!!focus?.parts.includes(p.id)}
                 onPartDown={onPartDown}
                 onPinDown={onPinDown}
               />
@@ -603,6 +606,16 @@ export function CircuitCanvas(props: Props) {
               <PartLabel key={p.id} part={p} />
             ))}
           </g>
+          {focus && (
+            <g className="pin-focus-layer">
+              {focus.pins.map((ref) => {
+                const part = partById.get(ref.part);
+                if (!part) return null;
+                const at = pinWorld(part, ref.pin);
+                return <circle key={pinKey(ref)} className="pin-focus" cx={at.x} cy={at.y} r="9" />;
+              })}
+            </g>
+          )}
           <g className="smokes">
             {circuit.parts.map((p) => p.burn && <Smoke key={p.id} part={p} />)}
           </g>

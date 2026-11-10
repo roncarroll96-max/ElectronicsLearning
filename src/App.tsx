@@ -6,6 +6,8 @@ import { SidePanel } from './components/SidePanel';
 import { StatusBar, type SimStatus } from './components/StatusBar';
 import { CircuitCanvas, type CanvasApi } from './canvas/CircuitCanvas';
 import { BurnNotice } from './components/BurnNotice';
+import { HelpPanel, INITIAL_HELP, type HelpState } from './components/HelpPanel';
+import { diagnose, type Issue } from './learn/diagnose';
 import { MeterPanel } from './meter/MeterPanel';
 import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterState } from './meter/meter';
 import { deleteItems, rotateParts, updatePart } from './model/circuit';
@@ -84,6 +86,17 @@ export function App() {
   );
   const noticePart = burnNotice ? circuit.parts.find((p) => p.id === burnNotice && p.burn) : undefined;
 
+  /* ---------- "Why isn't it working?" ---------- */
+  const [help, setHelp] = useState<HelpState>(INITIAL_HELP);
+  const issues = useMemo(() => diagnose(liveCircuit, sim), [liveCircuit, sim]);
+  const helpIssue = help.open ? issues[Math.min(help.index, issues.length - 1)] : undefined;
+  const applyFix = useCallback(
+    (issue: Issue) => {
+      if (issue.action) edit(issue.action.apply);
+    },
+    [edit],
+  );
+
   // Drop ids that no longer exist (after delete or undo).
   const selection = useMemo(() => {
     const ids = new Set([...circuit.parts.map((p) => p.id), ...circuit.wires.map((w) => w.id)]);
@@ -107,7 +120,10 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // Typing in a text box keeps its own keys (sliders don't need them).
+      const typing =
+        t && ((t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'range') || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (typing) return;
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && key === 'z') {
@@ -202,7 +218,9 @@ export function App() {
           sim={sim}
           meter={meter}
           onMeter={setMeter}
+          focus={helpIssue ? { parts: helpIssue.parts, pins: helpIssue.pins } : undefined}
         >
+          <HelpPanel help={help} issues={issues} empty={circuit.parts.length === 0} onChange={setHelp} onApply={applyFix} />
           {noticePart && (
             <BurnNotice
               key={noticePart.id}

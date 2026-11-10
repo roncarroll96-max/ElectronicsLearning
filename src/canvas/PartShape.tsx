@@ -12,12 +12,13 @@ interface Props {
   wireCount: Map<string, number>;
   targetKey: string | null;
   live?: PartLive;
+  focused?: boolean;
   onPartDown: (e: RPointerEvent, part: Part) => void;
   onPinDown: (e: RPointerEvent, ref: PinRef) => void;
 }
 
 /** One part on the canvas: body, selection outline and connectable pins. */
-export function PartShape({ part, view, selected, wireCount, targetKey, live, onPartDown, onPinDown }: Props) {
+export function PartShape({ part, view, selected, wireCount, targetKey, live, focused, onPartDown, onPinDown }: Props) {
   const def = PART_DEFS[part.kind];
   const b = def.bounds;
   return (
@@ -27,6 +28,7 @@ export function PartShape({ part, view, selected, wireCount, targetKey, live, on
       onPointerDown={(e) => onPartDown(e, part)}
     >
       <rect className="part-hit" x={b.x - 6} y={b.y - 6} width={b.w + 12} height={b.h + 12} rx="8" />
+      {focused && <rect className="part-focus" x={b.x - 12} y={b.y - 12} width={b.w + 24} height={b.h + 24} rx="12" />}
       {live?.hot && <rect className="part-hot" x={b.x - 9} y={b.y - 9} width={b.w + 18} height={b.h + 18} rx="10" />}
       {selected && <rect className="part-sel" x={b.x - 6} y={b.y - 6} width={b.w + 12} height={b.h + 12} rx="8" />}
       <g className="body">{view === 'schematic' ? <SchematicBody part={part} /> : <RealisticBody part={part} />}</g>

@@ -215,7 +215,7 @@ export function RealisticBody({ part }: { part: Part }) {
           <rect x="-30" y="-19" width="22" height="38" rx="5" fill="#e0a526" />
           <rect x="-12" y="-19" width="4" height="38" fill="#e0a526" />
           <text x="10" y="5" className="batt-text">
-            9V
+            {`${part.value ?? 9}V`}
           </text>
           <text x="-19" y="5" className="batt-sign">
             +

@@ -6,23 +6,14 @@ import type { BurnInfo, Part } from '../model/circuit';
 import { formatReading, formatValue } from '../model/parts';
 import type { PartReading } from './simulate';
 import type { Stress } from './ratings';
+import { standardUp } from '../model/values';
+
+export { standardUp };
 
 const A = (x: number) => formatReading(Math.abs(x), 'A');
 const V = (x: number) => formatReading(Math.abs(x), 'V');
 const W = (x: number) => formatReading(Math.abs(x), 'W');
 const fmt = (x: number, q: BurnInfo['quantity']) => (q === 'current' ? A(x) : q === 'power' ? W(x) : V(x));
-
-/** Standard resistor values (E12 series), one decade. */
-const E12 = [10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82];
-
-/** The smallest standard resistor value at or above r. */
-export function standardUp(r: number): number {
-  if (!(r > 0)) return 10;
-  const decade = 10 ** Math.floor(Math.log10(r) - 1);
-  for (let d = decade; ; d *= 10) {
-    for (const base of E12) if (base * d >= r * 0.9999) return base * d;
-  }
-}
 
 export interface Explanation {
   headline: string;
