@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 import { addPart, addWire, createPart, deleteItems, flipPart, newId, updatePart, type Circuit, type Part } from '../../model/circuit';
 import type { PartKind } from '../../model/parts';
 import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterMode, type MeterState } from '../../meter/meter';
-import { simulate } from '../../sim/simulate';
+import { simulate, type SimResult } from '../../sim/simulate';
+import { TransientSim } from '../../sim/transient';
+import { BASE_STEP } from '../../state/useLiveSim';
 import { worstBurnout } from '../../sim/ratings';
 import { topology } from '../topology';
 import { lessonById, LESSONS } from './index';
@@ -21,18 +23,35 @@ function play(id: string) {
   let meter: MeterState = { ...INITIAL_METER };
   let done: string[] = [];
 
+  // Like the app: a circuit with capacitors runs in time (the learner waits, the clock moves);
+  // without them it's solved once. The stepper is rebuilt on every change, keeping charge.
+  let engine: TransientSim | null = null;
+  let engineFor: [Circuit, MeterState] | null = null;
+  const live = (): SimResult => {
+    const sc = circuitWithMeter(c, meter);
+    if (!sc.parts.some((p) => p.kind === 'capacitor' && !p.burn)) {
+      engine = null;
+      return simulate(sc);
+    }
+    if (!engine || !engineFor || engineFor[0] !== c || engineFor[1] !== meter) {
+      engine = new TransientSim(sc, engine?.capStates(), engine?.time ?? 0);
+      engineFor = [c, meter];
+    }
+    return engine.result();
+  };
+
   const ctx = (): CheckCtx => {
     // The app burns out the most overloaded part, one at a time, until none is.
     for (let n = 0; n < 5; n++) {
-      const worst = worstBurnout(c, simulate(circuitWithMeter(c, meter)));
+      const worst = worstBurnout(c, live());
       if (!worst || worst.id.startsWith('__')) break;
       c = updatePart(c, worst.id, { burn: worst.burn });
     }
-    const sim = simulate(circuitWithMeter(c, meter));
+    const sim = live();
     // The app blows the fuse when an ammeter carries too much.
     const blown = fuseOverload(meter, sim);
     if (blown !== null) meter = { ...meter, fuseBlownAt: blown };
-    const sim2 = blown !== null ? simulate(circuitWithMeter(c, meter)) : sim;
+    const sim2 = blown !== null ? live() : sim;
     return { c, sim: sim2, t: topology(c), meter, reading: meter.open ? readMeter(c, meter, sim2) : null };
   };
   const tick = () => {
@@ -85,6 +104,21 @@ function play(id: string) {
         ...(red ? { red: { pin: { part: red[0].id, pin: red[1] } } } : {}),
         ...(black ? { black: { pin: { part: black[0].id, pin: black[1] } } } : {}),
       };
+    },
+    /** Lets circuit time pass (the app's clock running), ticking steps as it goes, like the app does every frame. */
+    wait(seconds: number) {
+      live();
+      const steps = Math.round(seconds / BASE_STEP);
+      for (let k = 0; k < steps && engine; k++) {
+        engine.step(BASE_STEP);
+        if (k % 50 === 0) tick();
+      }
+      return tick();
+    },
+    /** The power button: every capacitor empty, the clock back to zero. */
+    restart() {
+      engine = null;
+      engineFor = null;
     },
     replaceFuse() {
       meter = { ...meter, fuseBlownAt: null };
@@ -348,11 +382,13 @@ describe('lessons', () => {
     expect(isComplete(p.lesson, p.tick())).toBe(true);
   });
 
-  it('Capacitors: storing charge', () => {
+  it('Capacitors: storing charge (watched in time)', () => {
     const p = play('capacitors');
     const r = p.ref('R1');
     const cap = p.ref('C1');
     p.meter('V', [cap, 0], [cap, 1]);
+    p.expectDone([]); // the lesson has only just opened: still charging
+    p.wait(1); // τ = 0.1 s: full well within a second
     p.expectDone(['vc']);
     p.meter('V', [r, 0], [r, 1]);
     p.expectDone(['vc', 'vr']);
@@ -361,12 +397,23 @@ describe('lessons', () => {
     p.unwire(r, 1, cap, 0);
     p.wire(r, 1, led, 0);
     p.wire(led, 1, cap, 0);
+    p.wait(0.5);
     p.expectDone(['vc', 'vr', 'led']);
     p.set(cap, { value: 100e-6 });
     p.expectDone(['vc', 'vr', 'led', 'size']);
+    // Watch it charge: LED out, 1000 µF, power off and on. τ = 10 s.
     p.remove(led);
     p.wire(r, 1, cap, 0);
+    p.set(cap, { value: 1000e-6 });
+    p.restart();
+    p.expectDone(['vc', 'vr', 'led', 'size']); // just powered on: empty
+    p.wait(2); // 9·(1 − e^−0.2) ≈ 1.6 V: not yet
+    p.expectDone(['vc', 'vr', 'led', 'size']);
+    p.wait(4); // t = 6 s: 9·(1 − e^−0.6) ≈ 4.1 V
+    p.expectDone(['vc', 'vr', 'led', 'size', 'slow']);
+    // Reversed, a charged electrolytic is forced the wrong way and fails.
     p.c = flipPart(p.c, cap.id);
+    p.wait(30);
     expect(isComplete(p.lesson, p.tick())).toBe(true);
     expect(p.ref('C1').burn?.quantity).toBe('reverse');
   });

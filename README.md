@@ -1,4 +1,4 @@
-# Circuit Lab
+# Electronics Tutorial
 
 Learn electronics by building circuits that a real simulator runs. See [APP-SPEC.md](APP-SPEC.md) for the full specification.
 
@@ -28,6 +28,7 @@ Then open http://localhost:5180.
 - Milestone 1, step 6: lessons and first-launch welcome. Lesson system, track list, and all 20 lessons: Foundations (first LED, voltage, current, resistance, Ohm’s law, power, series, parallel, voltage dividers, switches and logic) and Components in Depth (diodes, LEDs, capacitors, potentiometers, light sensors, transistor switch, transistor gain, choosing a base resistor, a night-light project, diode logic). Each lesson is proven completable by an automated walk-through. Done.
 - Milestone 1, step 7: saving. Autosave of the sandbox and every lesson circuit, lesson progress, and where you were; "Continue where you left off"; named saves, export and import in "My circuits". Done.
 - Milestone 1 review: switches and push buttons work directly on the canvas, offline support after the first visit, and layout fixes. Spec checks 1, 2, 4 and 6 pass (3 and 5 belong to milestones 2 and 3). Done.
+- Milestone 2, step 1: circuits that change over time. Capacitors charge and discharge (with a charge gauge), LEDs fade, a two-transistor blinker blinks; a clock with pause, slow motion and power off/on; the Capacitors lesson now watches a capacitor charge. Done.
 
 ### Canvas controls
 
@@ -39,5 +40,6 @@ Then open http://localhost:5180.
 - **Stuck?** click "Why isn't it working?" at the top left of the canvas
 - **My circuits** (top bar): save, open, rename, delete, export to a file, import a file. Work is also saved automatically in this browser.
 - **Switches and push buttons:** click a switch to flip it; press and hold a push button to press it
+- **Circuit time** (appears when a circuit has a capacitor): pause, slow motion, and the power button to empty every capacitor and start again
 - **Multimeter:** click the meter button in the toolbar, then drag the red and black probes onto pins
 - **Pan:** drag empty space (two fingers on a tablet); **zoom:** mouse wheel or pinch; click the % to fit

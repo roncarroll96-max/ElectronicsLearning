@@ -17,7 +17,8 @@ import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterSta
 import { deleteItems, EMPTY_CIRCUIT, newId, rotateParts, updatePart, type Circuit } from './model/circuit';
 import type { PartKind } from './model/parts';
 import { worstBurnout } from './sim/ratings';
-import { simulate } from './sim/simulate';
+import { useLiveSim } from './state/useLiveSim';
+import { TimeControls } from './components/TimeControls';
 import { useCircuit } from './state/useCircuit';
 import { useTheme } from './state/theme';
 import {
@@ -92,7 +93,10 @@ export function App() {
   );
   const simCircuit = useMemo(() => circuitWithMeter(liveCircuit, meter), [liveCircuit, meter]);
   // Re-solve whenever anything changes. A DC solve of a circuit this size takes well under a millisecond.
-  const sim = useMemo(() => simulate(simCircuit), [simCircuit]);
+  // Solved once for a circuit without capacitors; run live in time for one with them.
+  const live = useLiveSim(simCircuit);
+  const sim = live.sim;
+  const restartTime = live.restart;
   const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
   const meterReading = useMemo(() => (meter.open ? readMeter(liveCircuit, meter, sim) : null), [liveCircuit, meter, sim]);
   const supply = circuit.parts.find((p) => p.kind === 'battery')?.value ?? 9;
@@ -120,13 +124,15 @@ export function App() {
       if (opening) load(opening, saved);
       else load(saved ?? lessonFor?.starter?.() ?? EMPTY_CIRCUIT);
       setActiveWorkspace(key);
+      // A different circuit: power it up from scratch (clock at zero, capacitors empty).
+      restartTime();
       setSelection([]);
       setPressed(new Set());
       setBurnNotice(null);
       setHelp((h) => ({ ...h, open: false }));
       window.setTimeout(() => canvasApi.current?.fit(), 30);
     },
-    [load],
+    [load, restartTime],
   );
   useEffect(() => {
     if (workspace === activeWorkspace) return;
@@ -205,7 +211,7 @@ export function App() {
     (list: SavedCircuit[]): string | null => {
       if (!saveSaved(list)) {
         setStorageOk(storageAvailable());
-        return 'Couldn’t save: this browser isn’t letting Circuit Lab store anything (it may be full, or blocked in a private window). Export to a file instead.';
+        return 'Couldn’t save: this browser isn’t letting Electronics Tutorial store anything (it may be full, or blocked in a private window). Export to a file instead.';
       }
       setSaved(list);
       return null;
@@ -218,6 +224,7 @@ export function App() {
     (c: Circuit, saveId: string | null) => {
       setSandboxSaveId(saveId);
       setMode('sandbox');
+      restartTime();
       if (activeWorkspace === 'sandbox') {
         load(c, circuit);
         setSelection([]);
@@ -227,7 +234,7 @@ export function App() {
         pendingOpen.current = c;
       }
     },
-    [activeWorkspace, circuit, load],
+    [activeWorkspace, circuit, load, restartTime],
   );
 
   const menu: CircuitsMenuApi = {
@@ -285,12 +292,13 @@ export function App() {
     // One caused by something outside the history (a held button, the meter) gets its own step.
     const fromEdit = lastCircuit.current !== circuit;
     lastCircuit.current = circuit;
-    const worst = worstBurnout(simCircuit, sim);
+    // Ratings use heat-averaged readings: a millisecond spike doesn't destroy a part.
+    const worst = worstBurnout(simCircuit, live.stress);
     if (worst) {
       edit((c) => updatePart(c, worst.id, { burn: worst.burn }), !fromEdit);
       setBurnNotice(worst.id);
     }
-    const blown = fuseOverload(meter, sim);
+    const blown = fuseOverload(meter, live.stress);
     if (blown !== null) setMeter((m) => ({ ...m, fuseBlownAt: blown }));
     // Runs once per new simulation result.
   }, [sim]);
@@ -437,11 +445,13 @@ export function App() {
           onRotate={rotateSelected}
           onDelete={deleteSelected}
           sim={sim}
+          stress={live.stress}
           meter={meter}
           onMeter={setMeter}
           onPress={onPress}
           focus={helpIssue ? { parts: helpIssue.parts, pins: helpIssue.pins } : undefined}
         >
+          {live.dynamic && <TimeControls live={live} />}
           <HelpPanel help={help} issues={issues} empty={circuit.parts.length === 0} onChange={setHelp} onApply={applyFix} />
           {noticePart && (
             <BurnNotice
@@ -479,6 +489,7 @@ export function App() {
           circuit={circuit}
           selection={selection}
           sim={sim}
+          stress={live.stress}
           edit={edit}
           pressed={pressed}
           onPress={onPress}

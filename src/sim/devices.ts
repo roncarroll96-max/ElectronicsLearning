@@ -20,6 +20,13 @@ interface Base {
 export type Device =
   | (Base & { type: 'g'; g: number })
   | (Base & { type: 'source'; v: number; g: number })
+  /**
+   * A capacitor during time-based simulation, as its "companion model": over one
+   * time step it behaves like a conductance geq in parallel with a current
+   * source ieq, both set by the step size and its recent voltages.
+   * Current into + is geq·(v+ − v−) − ieq.
+   */
+  | (Base & { type: 'cap'; c: number; geq: number; ieq: number })
   | (Base & { type: 'pn'; is: number; nvt: number; vcrit: number; s: number[] })
   | (Base & { type: 'lamp' })
   | (Base & { type: 'npn'; m: BjtModel; vcrit: number; s: number[] });
@@ -95,6 +102,9 @@ export function evaluate(d: Device, v: number[], scale: number, limit: boolean):
       // A voltage source with internal resistance (Thevenin), written as its
       // Norton equivalent: current into + is g·(v+ − v− − V).
       return twoTerminal(d.g * (v[0] - v[1] - d.v * scale), d.g, v);
+
+    case 'cap':
+      return twoTerminal(d.geq * (v[0] - v[1]) - d.ieq, d.geq, v);
 
     case 'lamp': {
       const [i, g] = lamp(v[0] - v[1]);

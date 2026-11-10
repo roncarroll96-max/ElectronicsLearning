@@ -330,7 +330,11 @@ function capacitor(part: Part, ctx: Ctx): Why {
     reasoning:
       'A capacitor fills up like a bucket. The bigger the capacitance (measured in farads; 10 µF is ten millionths of a farad), the more charge it needs to reach the same voltage, so the longer it takes to fill through a given resistor.',
     choice,
-    yours: r ? `Steady state: fully charged to ${V(Math.abs(r.v[0] - r.v[1]))}, with no current flowing. You’ll be able to watch it charge once time-based simulation arrives.` : undefined,
+    yours: r
+      ? Math.abs(r.i[0]) >= 1e-9
+        ? `Right now it’s at ${V(Math.abs(r.v[0] - r.v[1]))}, with ${A(Math.abs(r.i[0]))} flowing as it ${Math.sign(r.i[0]) === Math.sign(r.v[0] - r.v[1] || r.i[0]) ? 'charges' : 'discharges'}. Watch its gauge on the canvas; the clock at the top lets you slow it down or start again.`
+        : `Settled: charged to ${V(Math.abs(r.v[0] - r.v[1]))}, with no current flowing. Click the power button in the clock at the top of the canvas to empty it and watch it charge again.`
+      : undefined,
     math,
   };
 }

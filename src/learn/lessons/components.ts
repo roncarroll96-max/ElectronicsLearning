@@ -156,12 +156,12 @@ export const COMPONENTS: Lesson[] = [
     id: 'capacitors',
     track: 'components',
     title: 'Capacitors: storing charge',
-    summary: 'A charged capacitor holds its voltage and blocks steady current.',
+    summary: 'Watch a capacitor charge, see why R × C sets the speed, and why it then blocks steady current.',
     minutes: 6,
     concept: [
       'A capacitor is two metal plates separated by a thin insulator. Current flows into it only while it charges up; once its voltage matches the battery, the current stops. A charged capacitor blocks steady (DC) current.',
       'Its size, in farads (F), says how much charge it stores per volt. Practical sizes are tiny: microfarads (µF) and nanofarads (nF).',
-      'A note on this simulator: for now it shows circuits after they have settled, so capacitors appear already charged. Watching them charge and discharge over time (the basis of timers and blinkers) arrives with the Sound & Timing track.',
+      'How fast it fills depends on the resistor feeding it. The time constant τ = R × C is the time to reach 63% full; after 5τ it’s practically full. That one formula is the heart of every timer and blinker.',
     ],
     starter: starter(
       [
@@ -178,7 +178,7 @@ export const COMPONENTS: Lesson[] = [
     build: [
       {
         id: 'vc',
-        text: 'Measure across the capacitor (meter on V): the full 9 V. It has charged up to match the battery.',
+        text: 'Measure across the capacitor (meter on V): the full 9 V. It charged up to match the battery the moment the lesson opened (τ = 10 kΩ × 10 µF = 0.1 s, too quick to see). The gauge under it shows how full it is.',
         check: (c) => probesAcross(c, 'capacitor') && meterMag(c, 'V') > 8.5,
       },
       {
@@ -196,18 +196,26 @@ export const COMPONENTS: Lesson[] = [
     experiment: [
       {
         id: 'size',
-        text: 'Select the capacitor and change its value. Bigger or smaller, the LED stays dark: once settled, every capacitor blocks DC. (Size will matter when we watch it charge, in Sound & Timing.)',
+        text: 'Select the capacitor and change its value. Bigger or smaller, the LED stays dark: once charged, every capacitor blocks steady current. (Its size decides how fast it charges: try that next.)',
         check: (c) => parts(c, 'capacitor').some((p) => p.value !== 10e-6) && !ledLit(c, 1e-6),
       },
       {
+        id: 'slow',
+        text: 'Now watch it charge. Take the LED out (wire the resistor straight to the capacitor again), set C1 to 1000 µF, then click the power button (⏻) in the clock at the top of the canvas. τ = 10 kΩ × 1000 µF = 10 s: watch the gauge pass 63% of 9 V, about 5.7 V, after 10 seconds.',
+        hint: 'The clock counts up from 0 when you power on. The capacitor’s current is biggest at the start and shrinks as it fills: select it to see.',
+        check: (c) =>
+          !has(c, 'led') &&
+          parts(c, 'capacitor').some((p) => (p.value ?? 0) >= 470e-6 && between(voltageAcross(c, p), 3, 7)),
+      },
+      {
         id: 'reverse',
-        text: 'This kind of capacitor (an electrolytic) has a + and a −, marked on its body. Take the LED out (wire the resistor straight to the capacitor), then select the capacitor and click “Turn around”…',
-        hint: 'Reversed, the thin insulating layer inside breaks down. Real ones can pop.',
+        text: 'This kind of capacitor (an electrolytic) has a + and a −, marked on its body. Select it and click “Turn around”…',
+        hint: 'Watch its gauge: with 1000 µF it takes a few seconds. First its charge drains away, then the battery starts charging it backwards, and that’s when the thin insulating layer inside breaks down. Real ones can pop.',
         check: (c) => parts(c, 'capacitor').some((p) => p.burn),
       },
     ],
     why: {
-      capacitor: 'Here the capacitor is fully charged, so it holds 9 V and passes no current. Its + side must face the battery’s +.',
+      capacitor: 'Here the capacitor charges through the 10 kΩ resistor, so τ = R × C sets how fast. Once full it holds 9 V and passes no current. Its + side must face the battery’s +.',
     },
   },
 

@@ -42,7 +42,7 @@ export function Welcome({ onChoose }: { onChoose: (c: WelcomeChoice) => void }) 
             <circle cx="60" cy="20" r="2.5" fill="var(--accent)" />
           </svg>
         </div>
-        <h1 id="welcome-title">Welcome to Circuit Lab</h1>
+        <h1 id="welcome-title">Welcome to Electronics Tutorial</h1>
         <ul className="welcome-points">
           <li>
             <strong>Build real circuits.</strong> A simulator calculates every voltage and current, so what you see is what

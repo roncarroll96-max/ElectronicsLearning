@@ -2473,3 +2473,86 @@ kbd {
 .insp-actions .btn {
   white-space: nowrap;
 }
+
+/* ---------- Milestone 2, step 1: circuit time ---------- */
+
+.cap-charge {
+  pointer-events: none;
+}
+
+.cap-track {
+  fill: var(--surface-3);
+}
+
+.cap-fill {
+  fill: var(--sig-analog);
+}
+
+.cap-charge.reversed .cap-fill {
+  fill: var(--danger);
+}
+
+.cap-volts {
+  font: 600 10px var(--font-mono);
+  fill: var(--text-muted);
+  paint-order: stroke;
+  stroke: var(--canvas);
+  stroke-width: 3px;
+}
+
+.time-controls {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.time-controls .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+.tc-play {
+  color: var(--accent) !important;
+}
+
+.tc-clock {
+  display: flex;
+  flex-direction: column;
+  min-width: 128px;
+  line-height: 1.2;
+}
+
+.tc-time {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tc-status {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.tc-status.warn {
+  color: var(--warn);
+}
+
+.tc-speed {
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}

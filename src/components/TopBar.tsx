@@ -38,7 +38,7 @@ export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTog
             />
           </svg>
         </span>
-        <span className="brand-name">Circuit Lab</span>
+        <span className="brand-name">Electronics Tutorial</span>
       </div>
 
       <nav className="segmented" aria-label="Mode">

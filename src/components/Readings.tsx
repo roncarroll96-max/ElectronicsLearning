@@ -43,6 +43,28 @@ function rowsFor(part: Part, sim: SimResult): { rows: Row[]; note?: string } | n
       );
       return { rows };
     }
+    case 'capacitor': {
+      const volts = v[0] - v[1];
+      const amps = i[0];
+      const c = part.value ?? 0;
+      const moving = Math.abs(amps) >= 1e-9;
+      // Charging when current flows in at the side that is already higher (it's being pushed further apart).
+      const charging = moving && Math.sign(amps) === Math.sign(volts || amps);
+      return {
+        rows: [
+          ['Voltage across', formatReading(volts, 'V')],
+          [charging ? 'Charging current' : moving ? 'Discharging current' : 'Current', formatReading(Math.abs(amps), 'A')],
+          ['Energy stored', formatReading(0.5 * c * volts * volts, 'W').replace('W', 'J')],
+        ],
+        note: !moving
+          ? Math.abs(volts) > 0.01
+            ? 'Charged and settled: no current flows through it now.'
+            : 'Empty, and nothing is charging it.'
+          : charging
+            ? 'Charging: its voltage is rising, and the current shrinks as it fills.'
+            : 'Discharging: it is giving its stored charge back to the circuit.',
+      };
+    }
     case 'potentiometer':
       return {
         rows: [

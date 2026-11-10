@@ -1,8 +1,8 @@
-# Circuit Lab: Specification
+# Electronics Tutorial: Specification
 _Interview date: 2026-11-10 · Status: Approved 2026-11-10_
 
 ## Purpose
-Circuit Lab is a browser-based electronics lab where anyone can learn electricity and electronics by building circuits that a real simulator runs. It's inspired by the *idea* of the classic "150-in-1" project kits, but not their look. Its core difference: the old kits gave a wiring diagram and hoped it worked. Circuit Lab explains **why** every part and value was chosen, and when a circuit doesn't work, it helps you find out **why not**.
+Electronics Tutorial is a browser-based electronics lab where anyone can learn electricity and electronics by building circuits that a real simulator runs. It's inspired by the *idea* of the classic "150-in-1" project kits, but not their look. Its core difference: the old kits gave a wiring diagram and hoped it worked. Electronics Tutorial explains **why** every part and value was chosen, and when a circuit doesn't work, it helps you find out **why not**.
 
 **Success looks like:** a complete beginner can go from "what is voltage?" to designing their own working circuit (choosing the parts and values themselves), with plenty of "aha" moments along the way.
 
@@ -73,7 +73,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 - **Simulation accuracy is non-negotiable:** a teaching tool must never teach wrong physics. Where the simulator simplifies something, the lesson says so.
 - **Simulator assumptions (added in milestone 1, step 3):** every part model and its source is listed in `src/sim/models.ts`, and the simulator is checked against hand calculations in `src/sim/simulate.test.ts`. Known simplifications so far:
   - The 9 V battery has 1.5 Ω of internal resistance, like a fresh alkaline one, so readings come out slightly below the "ideal battery" textbook answer (21.1 mA instead of 21.2 mA for an LED with 330 Ω).
-  - Until time-based simulation arrives (milestone 2), circuits are shown in their settled state: a capacitor is treated as fully charged and passes no current.
+  - Circuits without capacitors are solved once, in their settled state. Circuits with capacitors run in time (milestone 2, step 1): 0.2 ms steps of circuit time (smaller in slow motion) using the BDF2 method SPICE calls "Gear", checked against e^(−t/RC) to within 0.2%. Every capacitor gets a fixed, invisible ±0.1% difference from its marked value, as real parts differ, so perfectly symmetrical circuits (a two-transistor blinker) start up as real ones do instead of balancing forever. Ratings (burnouts, "running hot", the meter's fuse) use readings averaged over 50 ms, since parts fail from heat building up, not from a millisecond spike such as a capacitor's first gulp of current.
   - The LED's reverse breakdown (around 5 V on real LEDs) isn't modeled yet; a reversed LED simply blocks.
   - The transistor's gain (β) is a fixed, typical 200; real transistors vary from part to part.
 - **Burnouts (added in milestone 1, step 4):** each part's ratings are listed in `src/sim/ratings.ts`. Above its datasheet rating a part is flagged as running hot; at about twice it (1.5× for the capacitor's voltage) it burns out and becomes an open circuit. Only the most overloaded part burns at a time, as in real life, where the weakest part fails first and often breaks the circuit. A burnout caused by an edit is undone together with that edit. A shorted battery is flagged as a short circuit but never "burns".
@@ -104,7 +104,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 - Runs entirely in a modern browser (Chrome, Edge, Firefox, Safari).
 - Hosted as a **free public website** (for example GitHub Pages) and works offline after the first visit.
 - No server, no hosting costs.
-- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth (settled-state solving takes under a millisecond, so it runs directly for now and moves to the background thread with time-based simulation in milestone 2); Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at milestone 3).
+- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth (it runs on the page for now: the time-based simulator computes 3 s of a two-transistor blinker in about 0.7 s and limits itself to half of each animation frame; it moves to a background thread with real sound in milestone 2, step 3, which needs tens of thousands of steps a second); Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at milestone 3).
 
 ## Decisions
 | Topic | Decision | Decided by |
@@ -132,11 +132,11 @@ Built in three milestones. Each milestone is a usable app on its own.
 | Lesson count | About 40 (10 per track), growing later | You |
 | Theme | Dark default, light option | You |
 | Audio safety | Muted at first, volume cap, limiter | You |
-| Name | "Circuit Lab" (working name) | You |
+| Name | "Electronics Tutorial" (working name, 2026-11-10; replaced "Circuit Lab", which is already circuitlab.com) | You |
 | Tech stack | TypeScript, background-thread simulator, Web Audio, avr8js | Assumed (Claude's default) |
 
 ## Open questions
-- **Final name:** "Circuit Lab" is a working name. Check it isn't already a well-known product before publishing. (You)
+- **Final name:** "Electronics Tutorial" is a working name. "Circuit Lab" was dropped because circuitlab.com is an established circuit simulator; "SparkBench" was considered (only clash: an IBM Apache Spark benchmark, unrelated). Pick and check the final name before publishing. Internal identifiers (storage keys, the file format tag "circuit-lab") stay as they are so saved work and exported files keep working. (You)
 - **In-browser compiler:** confirm it's practical (download size, speed) at the start of milestone 3. If not, revisit with you. (Claude)
 - **Hosting account:** publishing to GitHub Pages needs a GitHub repository. Decide when milestone 1 is ready to share. (You)
 

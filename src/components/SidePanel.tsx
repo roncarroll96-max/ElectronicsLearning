@@ -33,6 +33,8 @@ interface InspectorProps {
   circuit: Circuit;
   selection: string[];
   sim: SimResult;
+  /** Heat-averaged readings, for ratings. */
+  stress: SimResult;
   edit: EditFn;
   pressed: ReadonlySet<string>;
   onPress: (id: string, down: boolean) => void;
@@ -93,7 +95,7 @@ export function SidePanel({ mode, learn, ...inspector }: Props) {
   );
 }
 
-function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: InspectorProps) {
+function Inspector({ circuit, selection, sim, stress, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: InspectorProps) {
   if (selection.length === 0) {
     return (
       <div className="inspector-empty">
@@ -159,7 +161,7 @@ function Inspector({ circuit, selection, sim, edit, pressed, onPress, supply, on
         <dd className="mono">{part.rot}°</dd>
       </dl>
       <ValueEditor part={part} edit={edit} />
-      <PartHealth part={part} sim={sim} supply={supply} onReplace={() => onReplace(part.id)} />
+      <PartHealth part={part} sim={stress} supply={supply} onReplace={() => onReplace(part.id)} />
       <PartControls part={part} edit={edit} pressed={pressed.has(part.id)} onPress={onPress} />
       <PartReadings part={part} sim={sim} circuit={circuit} />
       <div className="insp-section">Pins</div>

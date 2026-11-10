@@ -219,7 +219,9 @@ export function formatValue(v: number, unit: Unit): string {
   if (v === 0) return `0 ${unit}`;
   let e = Math.floor(Math.log10(Math.abs(v)) / 3) * 3;
   e = Math.max(-12, Math.min(6, e));
-  const num = parseFloat((v / 10 ** e).toPrecision(3));
+  // Capacitors are never labelled in millifarads: 1000 µF, 4700 µF.
+  if (unit === 'F' && e === -3) e = -6;
+  const num = parseFloat((v / 10 ** e).toPrecision(e === -6 && unit === 'F' && Math.abs(v) >= 1e-3 ? 4 : 3));
   return `${num} ${PREFIXES[e]}${unit}`;
 }
 

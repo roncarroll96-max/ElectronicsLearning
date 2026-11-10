@@ -16,6 +16,12 @@ import { UnionFind } from './unionFind';
 export interface SimOptions {
   /** Override the battery's internal resistance, Ω (tests use a tiny value for textbook answers). */
   batteryResistance?: number;
+  /**
+   * How capacitors appear. 'open' (the default): the settled (DC) state, where a
+   * charged capacitor passes no current. 'companion': time-based simulation, where
+   * the caller sets each capacitor's companion conductance and current every step.
+   */
+  capacitors?: 'open' | 'companion';
 }
 
 export interface PartNet {
@@ -139,8 +145,9 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         });
         break;
       case 'capacitor':
-        // Steady state (DC): a capacitor blocks current once charged, so it is an open circuit.
-        // Time-based behavior (charging) arrives with the time-based simulator.
+        // Settled (DC): a charged capacitor blocks current, so it is an open circuit.
+        // Time-based: a companion model the time stepper updates every step.
+        if (opts.capacitors === 'companion') devices.push({ type: 'cap', lt: [0, 1], t: [], c: part.value ?? 0, geq: 0, ieq: 0 });
         break;
       case 'ground':
         break;

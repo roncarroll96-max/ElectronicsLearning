@@ -34,7 +34,7 @@ import { probePin, type MeterState, type Probe } from '../meter/meter';
 import { stressOf } from '../sim/ratings';
 import type { SimResult } from '../sim/simulate';
 import { GlowDefs, liveOf, Smoke, type PartLive } from './LiveFx';
-import { PartLabel, PartShape, PinLabels } from './PartShape';
+import { CapCharge, PartLabel, PartShape, PinLabels } from './PartShape';
 import { ProbeMarker, type ProbeColor } from './Probes';
 import { roundedPath, routeWire } from './wirePath';
 
@@ -63,6 +63,8 @@ interface Props {
   onRotate: () => void;
   onDelete: () => void;
   sim: SimResult;
+  /** Heat-averaged readings, for "running hot" (defaults to sim). */
+  stress?: SimResult;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
   /** Hold a push button down (true) or let it go (false). */
@@ -128,7 +130,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter, onPress, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, meter, onMeter, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -151,6 +153,8 @@ export function CircuitCanvas(props: Props) {
   const selSet = useMemo(() => new Set(selection), [selection]);
   const nets = useMemo(() => analyzeNets(circuit), [circuit]);
   const partById = useMemo(() => new Map(circuit.parts.map((p) => [p.id, p])), [circuit.parts]);
+  // The highest battery voltage: a capacitor's charge gauge is full at this.
+  const supply = useMemo(() => Math.max(0, ...circuit.parts.filter((p) => p.kind === 'battery').map((p) => p.value ?? 9)) || 9, [circuit.parts]);
 
   // How each part looks given the simulation: glowing, sounding, running hot.
   const live = useMemo(() => {
@@ -158,11 +162,11 @@ export function CircuitCanvas(props: Props) {
     if (!sim.ok || sim.idle) return out;
     for (const p of circuit.parts) {
       const r = sim.parts.get(p.id);
-      const s = stressOf(p, r);
+      const s = stressOf(p, (stress ?? sim).parts.get(p.id));
       out.set(p.id, liveOf(p, r, !!s && s.level !== 'ok'));
     }
     return out;
-  }, [circuit.parts, sim]);
+  }, [circuit.parts, sim, stress]);
 
   // Start with the world origin in the middle of the canvas.
   useLayoutEffect(() => {
@@ -640,6 +644,12 @@ export function CircuitCanvas(props: Props) {
             {circuit.parts.map((p) => (
               <PinLabels key={`m${p.id}`} part={p} view={view} />
             ))}
+            {sim.ok &&
+              !sim.idle &&
+              circuit.parts.map((p) => {
+                const r = p.kind === 'capacitor' && !p.burn ? sim.parts.get(p.id) : undefined;
+                return r ? <CapCharge key={`q${p.id}`} part={p} volts={r.v[0] - r.v[1]} supply={supply} /> : null;
+              })}
             {circuit.parts.map((p) => (
               <PartLabel key={p.id} part={p} />
             ))}

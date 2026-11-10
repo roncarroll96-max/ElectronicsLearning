@@ -113,6 +113,29 @@ export function PinLabels({ part, view }: { part: Part; view: View }) {
   );
 }
 
+/**
+ * A capacitor's charge gauge: how full it is compared with the battery, and its
+ * voltage, drawn just below the part and kept upright. Turns warning-coloured
+ * if the capacitor is charged the wrong way round.
+ */
+export function CapCharge({ part, volts, supply }: { part: Part; volts: number; supply: number }) {
+  const rb = rotatedBounds(PART_DEFS[part.kind].bounds, part.rot);
+  const w = 34;
+  const x = part.x + rb.x + rb.w / 2 - w / 2;
+  const y = part.y + rb.y + rb.h + 6;
+  const frac = Math.min(1, Math.abs(volts) / Math.max(supply, 0.1));
+  const reversed = volts < -0.05;
+  return (
+    <g className={`cap-charge${reversed ? ' reversed' : ''}`} aria-hidden="true">
+      <rect className="cap-track" x={x} y={y} width={w} height={4} rx={2} />
+      <rect className="cap-fill" x={x} y={y} width={w * frac} height={4} rx={2} />
+      <text className="cap-volts" x={x + w + 5} y={y + 4.5}>
+        {Math.abs(volts) < 0.005 ? '0 V' : `${volts.toFixed(Math.abs(volts) < 10 ? 2 : 1)} V`}
+      </text>
+    </g>
+  );
+}
+
 /** Reference and value text, kept upright whatever the part's rotation. */
 export function PartLabel({ part }: { part: Part }) {
   if (part.kind === 'ground') return null;

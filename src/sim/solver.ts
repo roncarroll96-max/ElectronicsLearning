@@ -101,6 +101,22 @@ function newton(n: number, devices: Device[], x0: Float64Array, gmin: number, sc
 }
 
 /**
+ * One time step: Newton's method starting from the previous step's answer,
+ * keeping each junction's history so it settles in a few iterations. Falls back
+ * to the full DC strategy if that fails (after a sudden change, say).
+ */
+export function solveFrom(net: Netlist, x0: Float64Array | null): Solution {
+  const n = net.size;
+  if (n === 0) return { x: new Float64Array(0), ok: true, iterations: 0 };
+  const devices = net.parts.flatMap((p) => p.devices);
+  if (x0 && x0.length === n) {
+    const r = newton(n, devices, x0, 0, 1);
+    if (r.ok) return r;
+  }
+  return solveDC(net);
+}
+
+/**
  * Finds every node voltage. If plain Newton fails to settle, falls back to the
  * standard SPICE tricks: first "gmin stepping" (start with every node lightly
  * tied to 0 V and loosen it), then "source stepping" (ramp the batteries up

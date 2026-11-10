@@ -43,8 +43,8 @@ describe('circuit files', () => {
   });
 
   it('refuses things that aren’t circuit files, with a plain reason', () => {
-    expect(parseCircuitFile('hello')).toEqual({ ok: false, error: expect.stringContaining('isn’t a Circuit Lab file') });
-    expect(parseCircuitFile('{"some":"json"}')).toEqual({ ok: false, error: expect.stringContaining('isn’t a Circuit Lab circuit file') });
+    expect(parseCircuitFile('hello')).toEqual({ ok: false, error: expect.stringContaining('isn’t an Electronics Tutorial file') });
+    expect(parseCircuitFile('{"some":"json"}')).toEqual({ ok: false, error: expect.stringContaining('isn’t an Electronics Tutorial circuit file') });
     expect(parseCircuitFile(fileWith({ parts: [], wires: [] }, { version: 99 }))).toEqual({
       ok: false,
       error: expect.stringContaining('newer version'),

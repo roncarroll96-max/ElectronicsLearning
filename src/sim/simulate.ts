@@ -5,8 +5,8 @@
 import { pinKey, type Circuit } from '../model/circuit';
 import { evaluate } from './devices';
 import { solveDense } from './linalg';
-import { buildNetlist, type SimOptions } from './netlist';
-import { solveDC } from './solver';
+import { buildNetlist, type Netlist, type SimOptions } from './netlist';
+import { solveDC, type Solution } from './solver';
 
 export type { SimOptions } from './netlist';
 
@@ -31,9 +31,15 @@ export interface SimResult {
   wires: Map<string, number>;
 }
 
+/** The settled (DC) state of a circuit. */
 export function simulate(c: Circuit, opts?: SimOptions): SimResult {
   const net = buildNetlist(c, opts);
   const sol = net.hasSource ? solveDC(net) : { x: new Float64Array(net.size), ok: true, iterations: 0 };
+  return readout(c, net, sol, !net.hasSource);
+}
+
+/** Every pin's voltage, every part's currents and power, and every wire's current, from solved node voltages. */
+export function readout(c: Circuit, net: Netlist, sol: Solution, idle: boolean): SimResult {
   const V = (k: number) => (k < 0 ? 0 : sol.x[k]);
 
   const parts = new Map<string, PartReading>();
@@ -76,7 +82,7 @@ export function simulate(c: Circuit, opts?: SimOptions): SimResult {
 
   return {
     ok: sol.ok,
-    idle: !net.hasSource,
+    idle,
     iterations: sol.iterations,
     nodes: net.size,
     parts,

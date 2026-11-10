@@ -128,11 +128,11 @@ export function parseCircuitFile(text: string): Checked<{ name: string; circuit:
   try {
     raw = JSON.parse(text);
   } catch {
-    return fail('This isn’t a Circuit Lab file: it couldn’t be read as one.');
+    return fail('This isn’t an Electronics Tutorial file: it couldn’t be read as one.');
   }
-  if (!isObj(raw) || raw.format !== FILE_FORMAT) return fail('This isn’t a Circuit Lab circuit file.');
+  if (!isObj(raw) || raw.format !== FILE_FORMAT) return fail('This isn’t an Electronics Tutorial circuit file.');
   if (!isNum(raw.version) || raw.version < 1) return fail('This file is damaged: its version is missing.');
-  if (raw.version > FILE_VERSION) return fail('This file was made by a newer version of Circuit Lab. Update the app to open it.');
+  if (raw.version > FILE_VERSION) return fail('This file was made by a newer version of Electronics Tutorial. Update the app to open it.');
   const c = checkCircuit(raw.circuit);
   if (!c.ok) return fail(`This file is damaged: ${c.error[0].toLowerCase()}${c.error.slice(1)}`);
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : 'Imported circuit';

@@ -62,7 +62,7 @@ export function CircuitsMenu({ api, onClose }: { api: CircuitsMenuApi; onClose: 
     e.target.value = '';
     if (!file) return;
     if (file.size > 5_000_000) {
-      setMessage({ text: 'That file is far too big to be a Circuit Lab circuit.', tone: 'warn' });
+      setMessage({ text: 'That file is far too big to be an Electronics Tutorial circuit.', tone: 'warn' });
       return;
     }
     const r = api.importText(await file.text());
@@ -82,7 +82,7 @@ export function CircuitsMenu({ api, onClose }: { api: CircuitsMenuApi; onClose: 
 
       {!api.storageOk && (
         <p className="cm-warn">
-          This browser isn’t letting Circuit Lab save anything (a private window, or blocked or full storage). Your work will be lost
+          This browser isn’t letting Electronics Tutorial save anything (a private window, or blocked or full storage). Your work will be lost
           when you close the page, so export it to a file.
         </p>
       )}
