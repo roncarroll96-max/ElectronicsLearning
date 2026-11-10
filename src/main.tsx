@@ -11,3 +11,13 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+
+// Offline support: after the first visit the app opens without an internet connection.
+// Only in the built site; the development server always serves fresh files.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* not available (e.g. a private window): the app still works online */
+    });
+  });
+}

@@ -676,6 +676,12 @@ p {
   cursor: crosshair;
 }
 
+/* Switches and push buttons are operated by clicking them on the canvas. */
+.part.kind-switch .body,
+.part.kind-pushbutton .body {
+  cursor: pointer;
+}
+
 .pin-hit {
   fill: transparent;
 }
@@ -2453,8 +2459,17 @@ kbd {
   color: var(--text-muted);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .circuits-label {
     display: none;
   }
+}
+
+/* Keep each inspector action on one line; wrap whole buttons instead. */
+.insp-actions {
+  flex-wrap: wrap;
+}
+
+.insp-actions .btn {
+  white-space: nowrap;
 }

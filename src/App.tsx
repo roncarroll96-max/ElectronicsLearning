@@ -439,6 +439,7 @@ export function App() {
           sim={sim}
           meter={meter}
           onMeter={setMeter}
+          onPress={onPress}
           focus={helpIssue ? { parts: helpIssue.parts, pins: helpIssue.pins } : undefined}
         >
           <HelpPanel help={help} issues={issues} empty={circuit.parts.length === 0} onChange={setHelp} onApply={applyFix} />

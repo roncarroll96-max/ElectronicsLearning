@@ -169,7 +169,7 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
       const set = (on: boolean) => edit((c) => updatePart(c, part.id, { on }));
       return (
         <div className="insp-control">
-          <span className="insp-control-label">Switch</span>
+          <span className="insp-control-label">Switch · or click it on the canvas</span>
           <div className="segmented insp-seg" role="group" aria-label="Switch position">
             <button className={part.on ? '' : 'on'} aria-pressed={!part.on} onClick={() => set(false)}>
               Open
@@ -185,6 +185,8 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
       const down = () => onPress(part.id, true);
       const up = () => onPress(part.id, false);
       return (
+        <div className="insp-control">
+        <span className="insp-control-label">Push button · or press and hold it on the canvas</span>
         <button
           className={`btn hold${pressed ? ' pressed' : ''}`}
           aria-pressed={pressed}
@@ -207,6 +209,7 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
         >
           {pressed ? 'Pressed' : 'Hold to press'}
         </button>
+        </div>
       );
     }
     case 'potentiometer':

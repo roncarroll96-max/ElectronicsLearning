@@ -20,6 +20,7 @@ import {
   pinWorld,
   pinWorldDir,
   samePin,
+  updatePart,
   type Circuit,
   type Part,
   type PinRef,
@@ -64,6 +65,8 @@ interface Props {
   sim: SimResult;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
+  /** Hold a push button down (true) or let it go (false). */
+  onPress: (id: string, down: boolean) => void;
   /** Parts and pins to point at ("where to look"). */
   focus?: { parts: string[]; pins: PinRef[] };
   /** Overlays drawn on top of the canvas (meter panel, notices). */
@@ -87,7 +90,18 @@ interface Draft {
 type Gesture =
   | { kind: 'none' }
   | { kind: 'pan'; pointerId: number; sx: number; sy: number; ox: number; oy: number }
-  | { kind: 'drag'; pointerId: number; ids: Set<string>; start: Pt; applied: Pt; recorded: boolean }
+  | {
+      kind: 'drag';
+      pointerId: number;
+      ids: Set<string>;
+      start: Pt;
+      applied: Pt;
+      recorded: boolean;
+      /** The part under the pointer; a click on a switch flips it, a held push button is pressed. */
+      part: Part;
+      operate: boolean;
+      pressing: boolean;
+    }
   | { kind: 'wire'; pointerId: number; from: PinRef; sx: number; sy: number; moved: boolean }
   | { kind: 'pinch'; d0: number; m0: Pt; v0: Viewport }
   | { kind: 'probe'; pointerId: number; color: ProbeColor; offset: Pt };
@@ -114,7 +128,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, meter, onMeter, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -371,6 +385,10 @@ export function CircuitCanvas(props: Props) {
       ids = new Set([part.id]);
     }
     capture(e.pointerId);
+    // Switches and push buttons work like the real thing: click to flip, press and hold to press.
+    const operate = !e.shiftKey && !part.burn && (part.kind === 'switch' || part.kind === 'pushbutton');
+    const pressing = operate && part.kind === 'pushbutton';
+    if (pressing) onPress(part.id, true);
     gesture.current = {
       kind: 'drag',
       pointerId: e.pointerId,
@@ -378,6 +396,9 @@ export function CircuitCanvas(props: Props) {
       start: toWorld(e.clientX, e.clientY),
       applied: { x: 0, y: 0 },
       recorded: false,
+      part,
+      operate,
+      pressing,
     };
   };
 
@@ -470,6 +491,10 @@ export function CircuitCanvas(props: Props) {
         const dx = sx - g.applied.x;
         const dy = sy - g.applied.y;
         if (dx === 0 && dy === 0) return;
+        // Moving it, not operating it.
+        if (g.pressing) onPress(g.part.id, false);
+        g.pressing = false;
+        g.operate = false;
         const ids = g.ids;
         // The first step of a drag is recorded for undo; the rest fold into it.
         edit((c) => moveParts(c, ids, dx, dy), !g.recorded);
@@ -505,6 +530,14 @@ export function CircuitCanvas(props: Props) {
     if (g.kind === 'none' || g.pointerId !== e.pointerId) return;
     gesture.current = { kind: 'none' };
     setPanning(false);
+
+    if (g.kind === 'drag' && g.operate) {
+      if (g.pressing) onPress(g.part.id, false);
+      else if (!cancelled && g.part.kind === 'switch') {
+        const id = g.part.id;
+        edit((c) => updatePart(c, id, { on: !c.parts.find((p) => p.id === id)?.on }));
+      }
+    }
 
     if (g.kind === 'wire') {
       const d = draftRef.current;
