@@ -1,0 +1,92 @@
+/*
+ * Design tokens: every color, size and timing the app uses lives here.
+ * Dark is the default theme; [data-theme="light"] overrides it.
+ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #0b0d12;
+  --canvas: #0e1117;
+  --surface: #141821;
+  --surface-2: #1a1f2a;
+  --surface-3: #222836;
+  --border: #252b38;
+  --border-strong: #343c4d;
+  --grid-dot: #262d3b;
+
+  /* Text */
+  --text: #e6e9ef;
+  --text-muted: #9aa3b5;
+  --text-faint: #646d80;
+
+  /* Brand accent */
+  --accent: #5eead4;
+  --accent-strong: #2dd4bf;
+  --accent-soft: rgba(94, 234, 212, 0.12);
+  --on-accent: #04201c;
+
+  /* Signal colors: one per kind of connection (see spec) */
+  --sig-power: #f87171;
+  --sig-ground: #94a3b8;
+  --sig-analog: #fbbf24;
+  --sig-digital: #a78bfa;
+
+  /* Feedback */
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #eef0f4;
+  --canvas: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f3f4f7;
+  --surface-3: #e8eaf0;
+  --border: #e0e3ea;
+  --border-strong: #c9ceda;
+  --grid-dot: #d3d8e2;
+
+  --text: #161a22;
+  --text-muted: #566074;
+  --text-faint: #8a93a6;
+
+  --accent: #0d9488;
+  --accent-strong: #0f766e;
+  --accent-soft: rgba(13, 148, 136, 0.1);
+  --on-accent: #ffffff;
+
+  --sig-power: #dc2626;
+  --sig-ground: #64748b;
+  --sig-analog: #d97706;
+  --sig-digital: #7c3aed;
+
+  --ok: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+
+  --shadow: 0 8px 24px rgba(20, 26, 40, 0.12);
+}
+
+:root {
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --topbar-h: 52px;
+  --statusbar-h: 30px;
+  --tray-w: 248px;
+  --panel-w: 340px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+}
