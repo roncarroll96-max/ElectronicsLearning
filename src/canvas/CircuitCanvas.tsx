@@ -31,6 +31,7 @@ import { GRID, PART_DEFS, rotatedBounds, type Dir, type PartKind } from '../mode
 import type { EditFn } from '../state/useCircuit';
 import type { Mode, View } from '../components/TopBar';
 import { probePin, type MeterState, type Probe } from '../meter/meter';
+import type { ScopeState } from '../scope/scope';
 import { stressOf } from '../sim/ratings';
 import type { SimResult } from '../sim/simulate';
 import { GlowDefs, liveOf, Smoke, type PartLive } from './LiveFx';
@@ -67,6 +68,8 @@ interface Props {
   stress?: SimResult;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
+  scope: ScopeState;
+  onScope: (s: ScopeState) => void;
   /** Hold a push button down (true) or let it go (false). */
   onPress: (id: string, down: boolean) => void;
   /** Parts and pins to point at ("where to look"). */
@@ -130,7 +133,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, meter, onMeter, onPress, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, meter, onMeter, scope, onScope, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -147,6 +150,20 @@ export function CircuitCanvas(props: Props) {
   draftRef.current = draft;
   const meterRef = useRef(meter);
   meterRef.current = meter;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  // Where any probe (meter or scope) is right now.
+  const probeOf = (color: ProbeColor): Probe =>
+    color === 'ch1' ? scopeRef.current.probes[0] : color === 'ch2' ? scopeRef.current.probes[1] : meterRef.current[color];
+  const setProbe = (color: ProbeColor, p: Probe) => {
+    if (color === 'ch1' || color === 'ch2') {
+      const probes = [...scopeRef.current.probes] as ScopeState['probes'];
+      probes[color === 'ch1' ? 0 : 1] = p;
+      onScope({ ...scopeRef.current, probes });
+    } else {
+      onMeter({ ...meterRef.current, [color]: p });
+    }
+  };
   const gesture = useRef<Gesture>({ kind: 'none' });
   const touches = useRef(new Map<number, Pt>());
 
@@ -444,7 +461,7 @@ export function CircuitCanvas(props: Props) {
   const onProbeDown = (e: RPointerEvent, color: ProbeColor) => {
     e.stopPropagation();
     if (e.button !== 0) return;
-    const tip = probeAt(meterRef.current[color]);
+    const tip = probeAt(probeOf(color));
     if (!tip) return;
     const w = toWorld(e.clientX, e.clientY);
     capture(e.pointerId);
@@ -465,6 +482,26 @@ export function CircuitCanvas(props: Props) {
       open: true,
       red: probePin(circuitRef.current, m.red) ? m.red : park(70),
       black: probePin(circuitRef.current, m.black) ? m.black : park(150),
+    });
+  };
+
+  const toggleScope = () => {
+    const s = scopeRef.current;
+    if (s.open) {
+      onScope({ ...s, open: false });
+      return;
+    }
+    // Park any loose probes in view: bottom right, left of where the meter's probes park
+    // (the scope panel itself sits bottom left).
+    const r = svgRef.current!.getBoundingClientRect();
+    const park = (dx: number): Probe => ({ at: toWorld(r.right - dx, r.bottom - 110) });
+    onScope({
+      ...s,
+      open: true,
+      probes: [
+        probePin(circuitRef.current, s.probes[0]) ? s.probes[0] : park(250),
+        probePin(circuitRef.current, s.probes[1]) ? s.probes[1] : park(330),
+      ],
     });
   };
 
@@ -511,7 +548,7 @@ export function CircuitCanvas(props: Props) {
         const w = toWorld(e.clientX, e.clientY);
         const tip = { x: w.x + g.offset.x, y: w.y + g.offset.y };
         const pin = findPinNear(tip, null, PROBE_SNAP_RADIUS);
-        onMeter({ ...meterRef.current, [g.color]: pin ? { pin } : { at: tip } });
+        setProbe(g.color, pin ? { pin } : { at: tip });
         return;
       }
       case 'wire':
@@ -667,6 +704,15 @@ export function CircuitCanvas(props: Props) {
           <g className="smokes">
             {circuit.parts.map((p) => p.burn && <Smoke key={p.id} part={p} />)}
           </g>
+          {scope.open && (
+            <g className="probes">
+              {(['ch2', 'ch1'] as const).map((color, k) => {
+                const p = scope.probes[1 - k];
+                const at = probeAt(p);
+                return at && <ProbeMarker key={color} color={color} at={at} attached={!!probePin(circuit, p)} onDown={onProbeDown} />;
+              })}
+            </g>
+          )}
           {meter.open && (
             <g className="probes">
               {(['black', 'red'] as const).map((color) => {
@@ -716,6 +762,7 @@ export function CircuitCanvas(props: Props) {
         showFlow={showFlow}
         onToggleFlow={() => setShowFlow((f) => !f)}
         onToggleMeter={toggleMeter}
+        onToggleScope={toggleScope}
       />
     </main>
   );
@@ -731,6 +778,7 @@ interface ToolbarProps extends Props {
   showFlow: boolean;
   onToggleFlow: () => void;
   onToggleMeter: () => void;
+  onToggleScope: () => void;
 }
 
 function Toolbar({
@@ -750,6 +798,8 @@ function Toolbar({
   onToggleFlow,
   meter,
   onToggleMeter,
+  scope,
+  onToggleScope,
 }: ToolbarProps) {
   const hasPart = selection.some((id) => circuit.parts.some((p) => p.id === id));
   return (
@@ -775,6 +825,10 @@ function Toolbar({
         <rect x="5" y="2.5" width="10" height="15" rx="2" />
         <rect x="7" y="4.5" width="6" height="4" rx="0.8" />
         <circle cx="10" cy="13" r="2" />
+      </ToolBtn>
+      <ToolBtn label={scope.open ? 'Put the oscilloscope away' : 'Oscilloscope'} pressed={scope.open} onClick={onToggleScope}>
+        <rect x="2.5" y="4" width="15" height="12" rx="2" />
+        <path d="M4.5 12.5h2.5l1.5-5 2 7 1.5-5h3.5" />
       </ToolBtn>
       <span className="tb-sep" />
       <ToolBtn label="Zoom out" onClick={onZoomOut}>

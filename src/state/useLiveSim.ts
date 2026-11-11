@@ -11,7 +11,8 @@
  * judged on readings averaged over a short thermal time constant.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Circuit } from '../model/circuit';
+import { pinKey, type Circuit, type PinRef } from '../model/circuit';
+import { Trace } from '../scope/trace';
 import { simulate, type PartReading, type SimResult } from '../sim/simulate';
 import { TransientSim } from '../sim/transient';
 
@@ -47,17 +48,27 @@ export interface LiveSim {
   lagging: boolean;
   /** Power off and on again: every capacitor empty, the clock back to zero. */
   restart: () => void;
+  /** The oscilloscope's record of its two probes, sampled every step (empty for circuits that don't change over time). */
+  trace: Trace;
 }
 
 const usesTime = (c: Circuit) => c.parts.some((p) => p.kind === 'capacitor' && !p.burn);
 
-export function useLiveSim(c: Circuit): LiveSim {
+/** `probes`: the pins the oscilloscope's two channels touch (null = not attached). */
+export function useLiveSim(c: Circuit, probes: [PinRef | null, PinRef | null] = [null, null]): LiveSim {
   const timed = usesTime(c);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
   const [lagging, setLagging] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [tick, setTick] = useState(0);
+
+  // The scope's record. Moving a probe starts a fresh record, so old readings from another pin never mix in.
+  const trace = useRef(new Trace()).current;
+  const probesRef = useRef(probes);
+  probesRef.current = probes;
+  const probeKey = probes.map((p) => (p ? pinKey(p) : '-')).join('|');
+  useEffect(() => trace.clear(), [probeKey, generation, trace]);
 
   // The stepper for the current circuit. Rebuilt on every change, carrying the
   // capacitors' charge and the clock across (unless restarting).
@@ -123,6 +134,8 @@ export function useLiveSim(c: Circuit): LiveSim {
       while (done < wanted && performance.now() - start < FRAME_BUDGET_MS) {
         if (!engine.step(h)) break;
         biggest = Math.max(biggest, engine.lastChange);
+        const [p1, p2] = probesRef.current;
+        if (p1 || p2) trace.push(engine.time, p1 ? (engine.voltageAt(p1) ?? NaN) : NaN, p2 ? (engine.voltageAt(p2) ?? NaN) : NaN);
         done++;
       }
       setLagging(done < wanted);
@@ -138,7 +151,7 @@ export function useLiveSim(c: Circuit): LiveSim {
     };
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [engine, paused, settled, speed, blend]);
+  }, [engine, paused, settled, speed, blend, trace]);
 
   // Heat view: the averaged readings, in the same shape as the live result.
   const stress = useMemo<SimResult>(() => {
@@ -167,5 +180,6 @@ export function useLiveSim(c: Circuit): LiveSim {
     setSpeed,
     lagging: lagging && !paused && !settled,
     restart,
+    trace,
   };
 }

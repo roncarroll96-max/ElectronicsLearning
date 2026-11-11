@@ -19,6 +19,9 @@ import type { PartKind } from './model/parts';
 import { worstBurnout } from './sim/ratings';
 import { useLiveSim } from './state/useLiveSim';
 import { TimeControls } from './components/TimeControls';
+import { INITIAL_SCOPE, scopePins, type ScopeState } from './scope/scope';
+import { ScopePanel } from './scope/ScopePanel';
+import { PART_DEFS } from './model/parts';
 import { useCircuit } from './state/useCircuit';
 import { useTheme } from './state/theme';
 import {
@@ -94,7 +97,9 @@ export function App() {
   const simCircuit = useMemo(() => circuitWithMeter(liveCircuit, meter), [liveCircuit, meter]);
   // Re-solve whenever anything changes. A DC solve of a circuit this size takes well under a millisecond.
   // Solved once for a circuit without capacitors; run live in time for one with them.
-  const live = useLiveSim(simCircuit);
+  const [scope, setScope] = useState<ScopeState>(INITIAL_SCOPE);
+  const scopeAt = useMemo(() => scopePins(liveCircuit, scope), [liveCircuit, scope]);
+  const live = useLiveSim(simCircuit, scopeAt);
   const sim = live.sim;
   const restartTime = live.restart;
   const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
@@ -448,10 +453,28 @@ export function App() {
           stress={live.stress}
           meter={meter}
           onMeter={setMeter}
+          scope={scope}
+          onScope={setScope}
           onPress={onPress}
           focus={helpIssue ? { parts: helpIssue.parts, pins: helpIssue.pins } : undefined}
         >
           {live.dynamic && <TimeControls live={live} />}
+          {scope.open && (
+            <ScopePanel
+              scope={scope}
+              onChange={setScope}
+              trace={live.trace}
+              now={live.time}
+              dynamic={live.dynamic}
+              steady={scopeAt.map((p) => (p && sim.ok && !sim.idle ? (sim.parts.get(p.part)?.v[p.pin] ?? null) : p ? 0 : null)) as [number | null, number | null]}
+              names={scopeAt.map((p) => {
+                const part = p && liveCircuit.parts.find((x) => x.id === p.part);
+                return part && p ? `${part.ref} · ${PART_DEFS[part.kind].pins[p.pin].name}` : null;
+              }) as [string | null, string | null]}
+              frame={live.time}
+              onClose={() => setScope((s) => ({ ...s, open: false }))}
+            />
+          )}
           <HelpPanel help={help} issues={issues} empty={circuit.parts.length === 0} onChange={setHelp} onApply={applyFix} />
           {noticePart && (
             <BurnNotice

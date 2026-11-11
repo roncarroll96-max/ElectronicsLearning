@@ -15,7 +15,7 @@
  * first step after any change uses the simpler backward Euler formula,
  * i ≈ C·(vₙ − vₙ₋₁) / h, which needs only one previous voltage.
  */
-import type { Circuit } from '../model/circuit';
+import type { Circuit, PinRef } from '../model/circuit';
 import type { Device } from './devices';
 import { buildNetlist, type Netlist, type SimOptions } from './netlist';
 import { readout, type SimResult } from './simulate';
@@ -61,6 +61,7 @@ export class TransientSim {
   private readonly caps: CapEntry[];
   private sol: Solution;
   private readonly hasSource: boolean;
+  private readonly pinNodes: Map<string, number[]>;
 
   /**
    * Builds the stepper for a circuit. `carry` holds capacitor voltages from
@@ -72,6 +73,7 @@ export class TransientSim {
     this.time = time;
     this.net = buildNetlist(c, { ...opts, capacitors: 'companion' });
     this.hasSource = this.net.hasSource;
+    this.pinNodes = new Map(this.net.parts.map((p) => [p.part.id, p.pinNodes]));
     this.caps = [];
     for (const pn of this.net.parts) {
       for (const d of pn.devices) {
@@ -144,6 +146,13 @@ export class TransientSim {
   private capVoltage(cap: CapEntry, x: Float64Array): number {
     const at = (k: number) => (k < 0 ? 0 : x[k]);
     return at(cap.nodes[0]) - at(cap.nodes[1]);
+  }
+
+  /** The voltage at one pin right now, relative to 0 V (cheap: for sampling every step). Null if the pin doesn't exist. */
+  voltageAt(ref: PinRef): number | null {
+    const k = this.pinNodes.get(ref.part)?.[ref.pin];
+    if (k === undefined) return null;
+    return k < 0 ? 0 : (this.sol.x[k] ?? 0);
   }
 
   /** Every voltage and current at the present moment. */

@@ -2556,3 +2556,243 @@ kbd {
   font: inherit;
   font-size: 12.5px;
 }
+
+/* ---------- Milestone 2, step 2: oscilloscope ---------- */
+
+.probe-ch1 .probe-handle {
+  stroke: #facc15;
+}
+
+.probe-ch2 .probe-handle {
+  stroke: #22d3ee;
+}
+
+.probe-ch1 .probe-label {
+  fill: #ca8a04;
+}
+
+.probe-ch2 .probe-label {
+  fill: #0891b2;
+}
+
+:root:not([data-theme='light']) .probe-ch1 .probe-label {
+  fill: #facc15;
+}
+
+:root:not([data-theme='light']) .probe-ch2 .probe-label {
+  fill: #22d3ee;
+}
+
+.scope {
+  position: absolute;
+  left: 12px;
+  bottom: 64px;
+  z-index: 6;
+  width: 426px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.scope.floating {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.scope-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.scope-title {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.scope-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scope-close {
+  width: 26px;
+  height: 26px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.scope-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.scope-chip:hover {
+  border-color: var(--accent);
+}
+
+.scope-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scope-screen {
+  position: relative;
+  width: 400px;
+  height: 240px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #1f2933;
+}
+
+.scope-screen canvas {
+  display: block;
+}
+
+.scope-overlay {
+  position: absolute;
+  font: 600 10.5px var(--font-mono);
+  color: rgba(226, 232, 240, 0.7);
+  pointer-events: none;
+}
+
+.scope-overlay.tl {
+  top: 5px;
+  left: 14px;
+}
+
+.scope-overlay.tr {
+  top: 5px;
+  right: 8px;
+}
+
+.scope-overlay.br {
+  bottom: 5px;
+  right: 8px;
+}
+
+.scope-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scope-ch {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.scope-ch.off .scope-ch-info,
+.scope-ch.off select,
+.scope-ch.off .scope-pos {
+  opacity: 0.45;
+}
+
+.scope-ch-toggle {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1.5px solid var(--ch);
+  background: transparent;
+  color: var(--ch);
+  font: 700 11px var(--font-mono);
+}
+
+.scope-ch-toggle[aria-pressed='true'] {
+  background: var(--ch);
+  color: #0b1015;
+}
+
+:root[data-theme='light'] .scope-ch-toggle[aria-pressed='false'] {
+  color: var(--text-muted);
+}
+
+.scope-ch select,
+.scope-time select {
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.scope-pos {
+  display: inline-flex;
+}
+
+.scope-pos button {
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.scope-pos button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.scope-pos button:last-child {
+  border-radius: 0 5px 5px 0;
+  border-left: 0;
+}
+
+.scope-ch-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.scope-ch-name {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-ch-read {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.scope-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scope-time label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .scope {
+    transform-origin: bottom left;
+    scale: 0.85;
+  }
+}
