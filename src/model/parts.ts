@@ -24,7 +24,8 @@ export type PartKind =
   | 'inductor'
   | 'transformer'
   | 'bridge'
-  | 'timer555';
+  | 'timer555'
+  | 'arduino';
 
 /** Wave shapes an AC source can make. */
 export type Wave = 'sine' | 'square' | 'triangle';
@@ -72,6 +73,16 @@ function twoPin(a = 'Pin 1', b = 'Pin 2'): PinDef[] {
     { name: b, x: 40, y: 0, dir: 'r' },
   ];
 }
+
+/** Names of the Uno's input/output pins, by index (~ marks the PWM pins analogWrite can use). */
+const UNO_PIN_NAMES = [
+  'D0 (RX)', 'D1 (TX)', 'D2', 'D3 ~', 'D4', 'D5 ~', 'D6 ~', 'D7',
+  'D8', 'D9 ~', 'D10 ~', 'D11 ~', 'D12', 'D13 (LED)',
+  'A0', 'A1', 'A2', 'A3', 'A4', 'A5',
+];
+
+/** The Uno's pins: 20 input/output pins (0–19), then power. */
+export const UNO = { io: 20, v5: 20, v33: 21, gnd: 22, gnd2: 23 } as const;
 
 export const PART_DEFS: Record<PartKind, PartDef> = {
   battery: {
@@ -230,6 +241,23 @@ export const PART_DEFS: Record<PartKind, PartDef> = {
       { name: 'DC out (−)', x: 0, y: 40, dir: 'd' },
     ],
     bounds: { x: -22, y: -22, w: 44, h: 44 },
+  },
+  // Arduino Uno: pin index = Arduino pin number for D0–D13; A0–A5 are 14–19 (as in Arduino code).
+  // Laid out like the real board: digital header along the top, power and analog along the bottom.
+  arduino: {
+    kind: 'arduino',
+    name: 'Arduino Uno',
+    prefix: 'U',
+    pins: [
+      ...[140, 120, 100, 80, 60, 40, 20, 0].map((x, i) => ({ name: UNO_PIN_NAMES[i], x, y: -100, dir: 'u' as Dir })),
+      ...[-40, -60, -80, -100, -120, -140].map((x, i) => ({ name: UNO_PIN_NAMES[8 + i], x, y: -100, dir: 'u' as Dir })),
+      ...[20, 40, 60, 80, 100, 120].map((x, i) => ({ name: UNO_PIN_NAMES[14 + i], x, y: 100, dir: 'd' as Dir })),
+      { name: '5V', x: -120, y: 100, dir: 'd' },
+      { name: '3.3V', x: -140, y: 100, dir: 'd' },
+      { name: 'GND', x: -100, y: 100, dir: 'd' },
+      { name: 'GND', x: -160, y: -100, dir: 'u' },
+    ],
+    bounds: { x: -180, y: -80, w: 360, h: 160 },
   },
   // Pin index + 1 is the chip's pin number.
   timer555: {

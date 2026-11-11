@@ -700,6 +700,108 @@ p {
   text-anchor: middle;
 }
 
+.uno-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.uno-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.uno-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.uno-errors ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.uno-serial-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.uno-serial {
+  margin: 0 0 12px;
+  height: 140px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.uno-serial-empty {
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+}
+
+.uno-pin {
+  font: 600 8px var(--font-sans);
+  fill: var(--symbol);
+  opacity: 0.8;
+}
+
+.uno-pin.real {
+  fill: #e8f4f5;
+  opacity: 0.95;
+}
+
+.uno-sub {
+  font: 500 9px var(--font-sans);
+  fill: var(--symbol);
+  opacity: 0.7;
+  text-anchor: middle;
+}
+
+.uno-mark {
+  font: 700 7px var(--font-sans);
+  fill: #e8f4f5;
+}
+
+.uno-logo {
+  font: 800 italic 30px var(--font-sans);
+  fill: #e8f4f5;
+  text-anchor: middle;
+  letter-spacing: 0.06em;
+  opacity: 0.92;
+}
+
 /* Pins: visible on hover, when selected, and while wiring */
 .pin {
   cursor: crosshair;

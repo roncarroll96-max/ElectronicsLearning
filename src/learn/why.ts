@@ -5,7 +5,7 @@
  * formulas go in `math`, shown behind a "Show the math" button.
  */
 import type { Circuit, Part } from '../model/circuit';
-import { AC_DEFAULT_F, formatFreq, formatReading, formatValue } from '../model/parts';
+import { AC_DEFAULT_F, UNO, formatFreq, formatReading, formatValue } from '../model/parts';
 import { E6, standardDown, standardUp } from '../model/values';
 import { inductorResistance, ldrResistance } from '../sim/models';
 import type { PartReading, SimResult } from '../sim/simulate';
@@ -129,6 +129,19 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
       };
     case 'timer555':
       return timer555(part, ctx);
+    case 'arduino': {
+      const r = ctx.r;
+      const vcc = r ? r.v[UNO.v5] - r.v[UNO.gnd] : 5;
+      return {
+        role: 'Microcontroller board',
+        goal: 'Run a program that reads its input pins and switches its output pins: a small computer that controls a circuit.',
+        reasoning:
+          'The Arduino Uno’s chip, an ATmega328P, runs your sketch 16 million steps a second. Each of pins D0–D13 and A0–A5 can be an output (connected inside to 5 V or to GND through about 25 Ω, which is why an output pin can light an LED but sags under heavy load) or an input (which reads HIGH above about 3 V and LOW below about 1.5 V, drawing almost no current). A0–A5 can also measure a voltage, 0–5 V as a number from 0 to 1023. Power comes from USB, and its 5V and 3.3V pins can supply the rest of a small circuit.',
+        choice: 'Keep each pin to 20 mA (40 mA is the absolute maximum, and past it the pin or the whole chip can die): an LED on a pin needs a resistor, 220 Ω is typical.',
+        yours: r ? `Its 5V pin is at ${V(vcc)}.` : undefined,
+        math: ['Pin current = (5 V − LED voltage) ÷ (R + 25 Ω)', 'analogRead = V_pin ÷ V_5V × 1023'],
+      };
+    }
     case 'ground':
       return {
         role: '0 V reference',

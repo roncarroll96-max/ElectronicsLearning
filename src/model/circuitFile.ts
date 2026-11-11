@@ -38,6 +38,9 @@ function checkBurn(raw: unknown): BurnInfo | undefined {
   return { quantity: q, value: raw.value, limit: raw.limit, v: nums(raw.v), i: nums(raw.i) };
 }
 
+/** Longest sketch accepted from a file, characters (a full Uno holds about 32 KB of program). */
+const MAX_SKETCH = 200_000;
+
 function checkPart(raw: unknown, n: number): Checked<Part> {
   const where = `part ${n + 1}`;
   if (!isObj(raw)) return fail(`${where} isn’t a part.`);
@@ -60,6 +63,10 @@ function checkPart(raw: unknown, n: number): Checked<Part> {
   if (isNum(raw.light)) part.light = Math.min(1, Math.max(0, raw.light));
   if (isNum(raw.freq)) part.freq = Math.min(AC_MAX_F, Math.max(AC_MIN_F, raw.freq));
   if (WAVES.includes(raw.wave as Wave)) part.wave = raw.wave as Wave;
+  if (typeof raw.sketch === 'string' && kind === 'arduino') {
+    if (raw.sketch.length > MAX_SKETCH) return fail(`${where} (${def.name}) has a sketch that is far too long.`);
+    part.sketch = raw.sketch;
+  }
   const burn = checkBurn(raw.burn);
   if (burn) part.burn = burn;
   return { ok: true, value: part };

@@ -4,6 +4,7 @@
  * local coordinates unless noted, and never catching the pointer.
  */
 import type { Part } from '../model/circuit';
+import { UNO } from '../model/parts';
 import { LAMP } from '../sim/models';
 import type { PartReading } from '../sim/simulate';
 import type { View } from '../components/TopBar';
@@ -34,6 +35,9 @@ export function liveOf(part: Part, r: PartReading | undefined, hot: boolean): Pa
       if (glow < 0.02) glow = 0;
     } else if (part.kind === 'buzzer') {
       sound = r.i[0] > 0.005;
+    } else if (part.kind === 'arduino') {
+      // The board's L light follows pin 13 (through a buffer, so it doesn't load the pin).
+      glow = r.v[13] - r.v[UNO.gnd] > 2.5 ? 1 : 0;
     }
   }
   return { glow, sound, hot };
@@ -71,6 +75,22 @@ export function PartGlow({ part, view, live }: { part: Part; view: View; live: P
           </>
         ) : (
           <path d="M-10 -10L10 0L-10 10Z" fill="#ff5b5b" opacity={g} />
+        )}
+      </g>
+    );
+  }
+  if (part.kind === 'arduino') {
+    if (view !== 'realistic') return null;
+    // The ON light is lit while it has power; L shows pin 13.
+    return (
+      <g className="live-fx">
+        <circle cx="132" cy="-61.5" r="9" fill="url(#glow-led)" opacity="0.3" />
+        <rect x="128" y="-64" width="8" height="5" rx="1" fill="#8dff9a" />
+        {g > 0 && (
+          <>
+            <circle cx="-104" cy="-61.5" r="13" fill="url(#glow-led)" opacity="0.9" />
+            <rect x="-108" y="-64" width="8" height="5" rx="1" fill="#ffb070" />
+          </>
         )}
       </g>
     );

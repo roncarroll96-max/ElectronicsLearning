@@ -13,6 +13,7 @@ import { pinKey, type Circuit, type PinRef } from '../model/circuit';
 import { SPEAKER } from './models';
 import type { PartReading, SimResult } from './simulate';
 import { TransientSim, type CapStates } from './transient';
+import { UnoCore } from '../arduino/uno';
 
 /** Normal step size: 0.2 ms of circuit time (slow motion shrinks it in proportion). */
 export const BASE_STEP = 2e-4;
@@ -33,8 +34,8 @@ const THERMAL_TAU = 0.05;
 const SETTLED_DV = 1e-6;
 
 /** Kinds of part that make a circuit change over time. */
-const TIMED = new Set(['capacitor', 'inductor', 'transformer', 'acsource', 'timer555']);
-/** Circuits that change over time: they have a working capacitor, coil, AC source or 555. */
+const TIMED = new Set(['capacitor', 'inductor', 'transformer', 'acsource', 'timer555', 'arduino']);
+/** Circuits that change over time: they have a working capacitor, coil, AC source, 555 or Arduino. */
 export const usesTime = (c: Circuit) => c.parts.some((p) => TIMED.has(p.kind) && !p.burn);
 const speakersOf = (c: Circuit) => c.parts.filter((p) => p.kind === 'speaker' && !p.burn);
 
@@ -53,6 +54,8 @@ export interface Frame {
   trace: { t: Float64Array; a: Float32Array; b: Float32Array } | null;
   /** Each sounding speaker's loudness: the changing part of its current, rms, A. */
   levels: [string, number][];
+  /** Each running Arduino: text it printed since the last frame, and whether it sent anything (the TX light). */
+  arduinos: { id: string; serial: string; tx: boolean; running: boolean }[];
 }
 
 export class LiveEngine {
@@ -74,6 +77,46 @@ export class LiveEngine {
   /** Steps into the current sound sample (0 … OVERSAMPLE−1), and their running total. */
   private sub = 0;
   private acc = 0;
+  /** Each Arduino's program (flash image), by part id, as the page sends them. */
+  private programs = new Map<string, Uint8Array>();
+  /** Each Arduino's running chip, by part id: kept across circuit edits, so programs keep running while you wire. */
+  private cores = new Map<string, UnoCore>();
+  private circuit: Circuit | null = null;
+
+  /**
+   * An Arduino's program, compiled on the page (null: none). A new program
+   * means a fresh start, as when you upload to a real board.
+   */
+  setProgram(id: string, program: Uint8Array | null): void {
+    if (program) this.programs.set(id, program);
+    else this.programs.delete(id);
+    this.cores.delete(id);
+    if (this.circuit) this.setCircuit(this.circuit, this.version, this.probes, false);
+  }
+
+  /** Press an Arduino's reset button. */
+  resetArduino(id: string): void {
+    const core = this.cores.get(id);
+    if (core && this.sim) {
+      core.reset(this.sim.time);
+      this.settled = false;
+      if (this.circuit) this.setCircuit(this.circuit, this.version, this.probes, false);
+    }
+  }
+
+  /** Make sure each working Arduino with a program has a running chip (and drop the others). */
+  private syncCores(c: Circuit, time: number, restart: boolean) {
+    const live = new Set<string>();
+    for (const p of c.parts) {
+      if (p.kind !== 'arduino' || p.burn) continue;
+      const program = this.programs.get(p.id);
+      if (!program) continue;
+      live.add(p.id);
+      const core = this.cores.get(p.id);
+      if (!core || restart || core.program !== program) this.cores.set(p.id, new UnoCore(program, time));
+    }
+    for (const id of [...this.cores.keys()]) if (!live.has(id)) this.cores.delete(id);
+  }
 
   /**
    * A new or changed circuit. Capacitor charge and the clock carry across,
@@ -82,19 +125,23 @@ export class LiveEngine {
   setCircuit(c: Circuit | null, version: number, probes: [PinRef | null, PinRef | null], restart: boolean): void {
     this.version = version;
     this.probes = probes;
+    this.circuit = c;
     this.settled = false;
     this.lagging = false;
     this.tT = [];
     this.tA = [];
     this.tB = [];
     if (!c || !usesTime(c)) {
+      this.cores.clear();
       this.sim = null;
       this.heat = new Map();
       return;
     }
     const carry = restart ? null : this.sim;
     if (restart) this.heat = new Map();
-    this.sim = new TransientSim(c, carry?.capStates(), carry?.time ?? 0);
+    const time = carry?.time ?? 0;
+    this.syncCores(c, time, restart);
+    this.sim = new TransientSim(c, carry?.capStates(), time, {}, this.cores);
     this.speakers = speakersOf(c).map((p) => ({ id: p.id, pins: [{ part: p.id, pin: 0 }, { part: p.id, pin: 1 }] }));
     this.sound = this.speakers.map(() => ({ sum: 0, sq: 0, n: 0 }));
     this.sub = 0;
@@ -225,6 +272,11 @@ export class LiveEngine {
       lagging: this.lagging && this.active,
       trace,
       levels,
+      arduinos: [...this.cores].map(([id, core]) => {
+        const tx = core.txCount > 0;
+        core.txCount = 0;
+        return { id, serial: core.takeSerial(), tx, running: !core.poweredDown };
+      }),
     };
   }
 

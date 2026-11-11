@@ -61,6 +61,10 @@ const GROUPS: PartGroup[] = [
     title: 'Chips',
     parts: [{ kind: 'timer555', name: '555 timer', hint: 'Pulses, tones' }],
   },
+  {
+    title: 'Microcontroller',
+    parts: [{ kind: 'arduino', name: 'Arduino Uno', hint: 'Runs your code' }],
+  },
 ];
 
 interface Props {

@@ -16,9 +16,10 @@
  * i ≈ C·(vₙ − vₙ₋₁) / h, which needs only one previous voltage.
  */
 import type { Circuit, PinRef } from '../model/circuit';
-import { P555 } from '../model/parts';
+import { P555, UNO } from '../model/parts';
+import type { UnoCore } from '../arduino/uno';
 import { storedCharge, waveAt, type Device } from './devices';
-import { JUNCTION_C, TIMER555, VT } from './models';
+import { ARDUINO, JUNCTION_C, TIMER555, VT } from './models';
 import { buildNetlist, type Netlist, type SimOptions } from './netlist';
 import { readout, type SimResult } from './simulate';
 import { solveAcross, solveFrom, type Solution } from './solver';
@@ -101,6 +102,18 @@ interface TimerEntry {
   q: 0 | 1;
 }
 
+/** An Arduino Uno: its running chip, its pins' nodes, and each I/O pin's three switched elements. */
+interface UnoEntry {
+  id: string;
+  core: UnoCore;
+  pins: number[];
+  high: Extract<Device, { type: 'gi' }>[];
+  low: Extract<Device, { type: 'gi' }>[];
+  pullup: Extract<Device, { type: 'gi' }>[];
+  /** It has stopped at a pin change the circuit hasn't caught up with yet. */
+  pending: boolean;
+}
+
 /** A 555's comparator inputs, relative to its own GND pin. */
 interface TimerLevels {
   vcc: number;
@@ -175,7 +188,14 @@ export class TransientSim {
    * before an edit, so charge is kept when the circuit changes (a switch
    * flips, a part moves); capacitors not in it start empty.
    */
-  constructor(c: Circuit, carry?: CapStates, time = 0, opts: SimOptions = {}) {
+  private readonly unos: UnoEntry[] = [];
+
+  /**
+   * `cores`: the running chip of each Arduino, by part id. They belong to the
+   * caller and outlive this simulator, so a program keeps running while the
+   * circuit around it is rewired, as on a real board.
+   */
+  constructor(c: Circuit, carry?: CapStates, time = 0, opts: SimOptions = {}, cores?: ReadonlyMap<string, UnoCore>) {
     this.circuit = c;
     this.time = time;
     this.net = buildNetlist(c, { ...opts, capacitors: 'companion' });
@@ -190,6 +210,15 @@ export class TransientSim {
         const gi = (role: string) => pn.devices.find((d) => d.type === 'gi' && d.role === role) as Extract<Device, { type: 'gi' }>;
         const q = carry?.get(`${id}#Q`)?.v === 1 ? 1 : 0;
         this.timers.push({ id, pins: pn.pinNodes, high: gi('high'), low: gi('low'), discharge: gi('discharge'), q });
+      }
+      const core = cores?.get(id);
+      if (pn.part.kind === 'arduino' && pn.devices.length && core) {
+        const gis = (role: string) => {
+          const out: Extract<Device, { type: 'gi' }>[] = [];
+          for (const d of pn.devices) if (d.type === 'gi' && d.role === role) out[d.pin ?? 0] = d;
+          return out;
+        };
+        this.unos.push({ id, core, pins: pn.pinNodes, high: gis('pin-high'), low: gis('pin-low'), pullup: gis('pin-pullup'), pending: false });
       }
       for (const d of pn.devices) {
         if (d.type === 'ind') {
@@ -223,6 +252,7 @@ export class TransientSim {
       }
     }
     for (const t of this.timers) this.applyTimer(t);
+    for (const u of this.unos) this.applyUno(u);
     // Before the first step: the circuit with every capacitor holding its voltage.
     this.sol = this.solveStep(Infinity, false);
     this.settleTimers();
@@ -239,7 +269,7 @@ export class TransientSim {
    * energy (a capacitor or a coil) or makes a signal, and it is powered or still holds energy.
    */
   get dynamic(): boolean {
-    const timed = this.caps.length + this.inductors.length + this.xfmrs.length + this.sources.length + this.timers.length > 0;
+    const timed = this.caps.length + this.inductors.length + this.xfmrs.length + this.sources.length + this.timers.length + this.unos.length > 0;
     return timed && (this.hasSource || !this.empty(1e-9));
   }
 
@@ -258,7 +288,7 @@ export class TransientSim {
    * source never stops changing.
    */
   get lastChange(): number {
-    if (this.sources.some((s) => s.amp > 0)) return Infinity;
+    if (this.sources.some((s) => s.amp > 0) || this.unos.length) return Infinity;
     let m = 0;
     for (const c of this.caps) m = Math.max(m, c.history.steps > 0 ? Math.abs(c.history.v - c.history.vPrev) : Infinity);
     for (const l of this.inductors) m = Math.max(m, Math.abs(l.i - l.iPrev));
@@ -297,6 +327,75 @@ export class TransientSim {
    * after any sudden change. It lands within 1/64 of h of the true moment.
    */
   step(h: number): boolean {
+    return this.unos.length ? this.stepWithUnos(h) : this.stepAnalog(h);
+  }
+
+  /**
+   * Advances by h with Arduinos running. Each chip runs ahead until a pin of
+   * its changes (or to the end of h); the circuit then advances to the
+   * earliest such moment, that chip's pins switch, and the circuit is solved
+   * again at that instant. So every edge a program makes (a digitalWrite, a
+   * PWM pulse, a tone) lands at its true time, to the clock cycle, and the
+   * circuit's response follows it. The chips read their pin voltages at each
+   * of these moments (at least once per step h).
+   */
+  private stepWithUnos(h: number): boolean {
+    const end = this.time + h;
+    for (let guard = 0; guard < 1e6; guard++) {
+      this.feedUnos();
+      for (const u of this.unos) if (!u.pending && u.core.time < end) u.pending = u.core.runUntil(end);
+      let next = end;
+      for (const u of this.unos) if (u.pending) next = Math.min(next, u.core.time);
+      const dt = next - this.time;
+      if (dt > h * 1e-9 && !this.stepAnalog(dt)) return false;
+      this.time = Math.max(this.time, next); // exact: the step lands on the chip's clock cycle
+      let switched = false;
+      for (const u of this.unos) {
+        if (u.pending && u.core.time <= next + 1e-12) {
+          u.pending = false;
+          this.applyUno(u);
+          switched = true;
+        }
+      }
+      if (switched) {
+        // The pins switch instantly: solve again at this moment, capacitors holding their charge.
+        const held = this.solveStep(Infinity, false);
+        if (held.ok) this.sol = held;
+        this.nHist = 0;
+        this.settleTimers();
+      }
+      if (next >= end - h * 1e-9) return true;
+    }
+    return true;
+  }
+
+  /** Tells each chip its pin voltages and supply (relative to its GND), from the present solution. */
+  private feedUnos(): void {
+    const x = this.sol.x;
+    for (const u of this.unos) {
+      const at = (pin: number) => {
+        const k = u.pins[pin];
+        return k < 0 ? 0 : x[k];
+      };
+      const g = at(UNO.gnd);
+      u.core.setVoltages((pin) => at(pin) - g, at(UNO.v5) - g);
+    }
+  }
+
+  /** Sets an Uno's pin elements to what its program is doing with each pin. */
+  private applyUno(u: UnoEntry): void {
+    const A = ARDUINO;
+    const on = 1 / A.pinR;
+    u.core.drives.forEach((d, pin) => {
+      // Off switches toward 5 V are fully off, and only the one to GND leaks a
+      // trace: an unconnected input then rests at 0 V instead of somewhere in between.
+      u.high[pin].geq = d === 'high' ? on : 0;
+      u.low[pin].geq = d === 'low' ? on : A.off;
+      u.pullup[pin].geq = d === 'pullup' ? 1 / A.pullUp : 0;
+    });
+  }
+
+  private stepAnalog(h: number): boolean {
     let left = h;
     const hSnap = h / 64;
     const hMin = h * 1e-6; // never shrink below this for accuracy alone

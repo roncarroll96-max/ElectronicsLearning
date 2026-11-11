@@ -40,6 +40,38 @@ function ChipPins({ real = false }: { real?: boolean }) {
   );
 }
 
+/** The Uno's pin labels, printed on the board beside each header pin (x = the pin's x). */
+const UNO_TOP: [number, string][] = [
+  [-160, 'GND'], [-140, '13'], [-120, '12'], [-100, '~11'], [-80, '~10'], [-60, '~9'], [-40, '8'],
+  [0, '7'], [20, '~6'], [40, '~5'], [60, '4'], [80, '~3'], [100, '2'], [120, 'TX1'], [140, 'RX0'],
+];
+const UNO_BOTTOM: [number, string][] = [
+  [-140, '3.3V'], [-120, '5V'], [-100, 'GND'], [20, 'A0'], [40, 'A1'], [60, 'A2'], [80, 'A3'], [100, 'A4'], [120, 'A5'],
+];
+
+function UnoLabels({ real }: { real: boolean }) {
+  const c = `uno-pin${real ? ' real' : ''}`;
+  return (
+    <>
+      {UNO_TOP.map(([x, t]) => (
+        <text key={`t${x}`} className={c} transform={`translate(${x} -70) rotate(-90)`} textAnchor="end" dy="2.5">
+          {t}
+        </text>
+      ))}
+      {UNO_BOTTOM.map(([x, t]) => (
+        <text key={`b${x}`} className={c} transform={`translate(${x} 70) rotate(-90)`} textAnchor="start" dy="2.5">
+          {t}
+        </text>
+      ))}
+    </>
+  );
+}
+
+const UNO_LEADS =
+  'M-160 -100V-80M-140 -100V-80M-120 -100V-80M-100 -100V-80M-80 -100V-80M-60 -100V-80M-40 -100V-80' +
+  'M0 -100V-80M20 -100V-80M40 -100V-80M60 -100V-80M80 -100V-80M100 -100V-80M120 -100V-80M140 -100V-80' +
+  'M-140 80V100M-120 80V100M-100 80V100M20 80V100M40 80V100M60 80V100M80 80V100M100 80V100M120 80V100';
+
 export function SchematicBody({ part }: { part: Part }) {
   switch (part.kind) {
     case 'resistor':
@@ -173,6 +205,16 @@ export function SchematicBody({ part }: { part: Part }) {
           <rect className="sym" x="-40" y="-40" width="80" height="80" rx="3" />
           <text className="chip-name" y="5">555</text>
           <ChipPins />
+        </>
+      );
+    case 'arduino':
+      return (
+        <>
+          <path className="sym" d={UNO_LEADS} />
+          <rect className="sym" x="-180" y="-80" width="360" height="160" rx="4" />
+          <text className="chip-name" y="2">Arduino Uno</text>
+          <text className="uno-sub" y="16">ATmega328P · 16 MHz</text>
+          <UnoLabels real={false} />
         </>
       );
     case 'ground':
@@ -376,6 +418,41 @@ export function RealisticBody({ part }: { part: Part }) {
           <circle cx="-26" cy="-26" r="3" fill="#2f333b" />
           <text className="chip-name real" y="-2">NE555</text>
           <ChipPins real />
+        </>
+      );
+    case 'arduino':
+      return (
+        <>
+          <path className="lead" d={UNO_LEADS} />
+          {/* The board */}
+          <rect x="-180" y="-80" width="360" height="160" rx="8" fill="#00818a" stroke="#005b62" strokeWidth="1.5" />
+          {[-170, 170].flatMap((x) => [-70, 70].map((y) => <circle key={`${x},${y}`} cx={x} cy={y} r="3.2" fill="#e8ecef" stroke="#005b62" />))}
+          {/* USB socket and power jack on the left edge */}
+          <rect x="-192" y="-58" width="40" height="34" rx="2" fill="#c9ced6" stroke="#8a919c" />
+          <rect x="-186" y="-52" width="28" height="22" rx="1" fill="#aeb4bd" />
+          <rect x="-190" y="26" width="34" height="30" rx="3" fill="#1d1f24" stroke="#000" />
+          {/* Headers */}
+          <rect x="-170" y="-90" width="140" height="12" rx="1.5" fill="#15171b" />
+          <rect x="-10" y="-90" width="160" height="12" rx="1.5" fill="#15171b" />
+          <rect x="-150" y="78" width="60" height="12" rx="1.5" fill="#15171b" />
+          <rect x="10" y="78" width="120" height="12" rx="1.5" fill="#15171b" />
+          {/* The chip: an ATmega328P in its 28-pin package */}
+          <rect x="10" y="22" width="150" height="34" rx="3" fill="#1f2228" stroke="#0e1013" />
+          <circle cx="20" cy="39" r="3" fill="#2f333b" />
+          <text className="chip-name real" x="88" y="43">ATMEGA328P</text>
+          {/* Reset button, and the L, TX, RX and ON lights */}
+          <rect x="-150" y="-62" width="18" height="18" rx="2" fill="#d5d9df" stroke="#8a919c" />
+          <circle cx="-141" cy="-53" r="5" fill="#b9332f" />
+          <rect x="-108" y="-64" width="8" height="5" rx="1" fill="#e9d79b" />
+          <text className="uno-mark" x="-94" y="-59.5" textAnchor="start">L</text>
+          <rect x="-108" y="-54" width="8" height="5" rx="1" fill="#e9d79b" />
+          <text className="uno-mark" x="-94" y="-49.5" textAnchor="start">TX</text>
+          <rect x="-108" y="-44" width="8" height="5" rx="1" fill="#e9d79b" />
+          <text className="uno-mark" x="-94" y="-39.5" textAnchor="start">RX</text>
+          <rect x="128" y="-64" width="8" height="5" rx="1" fill="#e9d79b" />
+          <text className="uno-mark" x="124" y="-59.5" textAnchor="end">ON</text>
+          <text className="uno-logo" x="-40" y="2">UNO</text>
+          <UnoLabels real />
         </>
       );
     case 'ground':

@@ -7,7 +7,7 @@
  * - A separate piece of circuit with no ground symbol uses its battery's −
  *   terminal as 0 V (or any node, if it has no battery).
  */
-import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS, UNO } from '../model/parts';
 import { pinKey, type Circuit, type Part } from '../model/circuit';
 import * as M from './models';
 import { criticalVoltage, type Device } from './devices';
@@ -230,6 +230,23 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         devices.push({ type: 'gi', role: 'high', lt: [vcc, out], t: [], geq: T.off, ieq: 0 });
         devices.push({ type: 'gi', role: 'low', lt: [out, gnd], t: [], geq: 1 / T.outR, ieq: 0 });
         devices.push({ type: 'gi', role: 'discharge', lt: [dis, gnd], t: [], geq: 1 / T.dischargeR, ieq: 0 });
+        break;
+      }
+      case 'arduino': {
+        const A = M.ARDUINO;
+        // Powered over USB: its GND is a 0 V reference, like a battery's − terminal.
+        hasSource = true;
+        batteryMinus.push(local[UNO.gnd]);
+        resistor(UNO.gnd2, UNO.gnd, M.MIN_R); // both GND pins are the same copper
+        devices.push({ type: 'source', lt: [UNO.v5, UNO.gnd], t: [], v: A.vcc, g: 1 / A.usbR });
+        devices.push({ type: 'source', lt: [UNO.v33, UNO.gnd], t: [], v: A.v33, g: 1 / A.r33 });
+        // Each input/output pin: driven high, driven low, or pulled up, switched by the
+        // running program (transient.ts). It starts as an input, as after a reset.
+        for (let pin = 0; pin < UNO.io; pin++) {
+          devices.push({ type: 'gi', role: 'pin-high', pin, lt: [UNO.v5, pin], t: [], geq: 0, ieq: 0 });
+          devices.push({ type: 'gi', role: 'pin-low', pin, lt: [pin, UNO.gnd], t: [], geq: A.off, ieq: 0 });
+          devices.push({ type: 'gi', role: 'pin-pullup', pin, lt: [UNO.v5, pin], t: [], geq: 0, ieq: 0 });
+        }
         break;
       }
       case 'ground':

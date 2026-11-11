@@ -7,6 +7,8 @@ import type { EditFn } from '../state/useCircuit';
 import { PartIcon } from './PartIcon';
 import { PartControls, PartHealth, PartReadings, WireReading } from './Readings';
 import { ValueEditor } from './ValueEditor';
+import { ArduinoPanel } from './ArduinoPanel';
+import type { Arduinos } from '../state/useArduinos';
 import { WhyPanel } from './WhyPanel';
 import type { Mode } from './TopBar';
 
@@ -42,6 +44,8 @@ interface InspectorProps {
   onReplace: (id: string) => void;
   onRotate: () => void;
   onDelete: () => void;
+  /** The circuit's Arduinos (programs, serial output). */
+  arduinos?: Arduinos;
 }
 
 /** Right-hand panel: tracks and lessons in Learn mode, the part inspector in Sandbox mode. */
@@ -95,7 +99,7 @@ export function SidePanel({ mode, learn, ...inspector }: Props) {
   );
 }
 
-function Inspector({ circuit, selection, sim, stress, edit, pressed, onPress, supply, onReplace, onRotate, onDelete }: InspectorProps) {
+function Inspector({ circuit, selection, sim, stress, edit, pressed, onPress, supply, onReplace, onRotate, onDelete, arduinos }: InspectorProps) {
   if (selection.length === 0) {
     return (
       <div className="inspector-empty">
@@ -163,6 +167,7 @@ function Inspector({ circuit, selection, sim, stress, edit, pressed, onPress, su
       <ValueEditor part={part} edit={edit} />
       <PartHealth part={part} sim={stress} supply={supply} onReplace={() => onReplace(part.id)} />
       <PartControls part={part} edit={edit} pressed={pressed.has(part.id)} onPress={onPress} />
+      {part.kind === 'arduino' && <ArduinoPanel part={part} edit={edit} arduinos={arduinos} />}
       <PartReadings part={part} sim={sim} circuit={circuit} />
       <div className="insp-section">Pins</div>
       <ul className="insp-pins">

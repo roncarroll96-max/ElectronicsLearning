@@ -16,6 +16,7 @@ import { probesKey, usesTime, type Frame, type Speed } from '../sim/live';
 import { simulate, type SimResult } from '../sim/simulate';
 import { TransientSim, type CapStates } from '../sim/transient';
 import type { ToWorker } from '../sim/worker';
+import { useArduinos, type Arduinos } from './useArduinos';
 
 export { BASE_STEP, SPEEDS, type Speed } from '../sim/live';
 
@@ -44,6 +45,8 @@ export interface LiveSim {
   levels: ReadonlyMap<string, number>;
   /** Gives the worker a port to the audio thread, for speaker sound. */
   connectAudio: (port: MessagePort) => void;
+  /** The circuit's Arduinos: their programs' status and what they print. */
+  arduinos: Arduinos;
 }
 
 /**
@@ -139,6 +142,7 @@ export function useLiveSim(c: Circuit, probes: [PinRef | null, PinRef | null] = 
   const stress = useMemo<SimResult>(() => (current ? { ...current.result, parts: current.heat } : sim), [current, sim]);
   const levels = useMemo(() => new Map(current?.levels ?? []), [current]);
 
+  const arduinos = useArduinos(c, send, current, timed);
   const restart = useCallback(() => setGeneration((g) => g + 1), []);
   const connectAudio = useCallback((port: MessagePort) => send({ type: 'audioPort', port }, [port]), [send]);
 
@@ -157,5 +161,6 @@ export function useLiveSim(c: Circuit, probes: [PinRef | null, PinRef | null] = 
     trace,
     levels,
     connectAudio,
+    arduinos,
   };
 }

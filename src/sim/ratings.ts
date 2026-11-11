@@ -7,7 +7,7 @@
  * one and a half to two times their rating.
  */
 import type { BurnInfo, Circuit, Part } from '../model/circuit';
-import type { PartKind } from '../model/parts';
+import { UNO, type PartKind } from '../model/parts';
 import type { PartReading, SimResult } from './simulate';
 
 export type Quantity = BurnInfo['quantity'];
@@ -56,6 +56,8 @@ export const RATINGS: Partial<Record<PartKind, Limit[]>> = {
     { quantity: 'voltage', max: 16, burn: 18 },
     { quantity: 'current', max: 0.2, burn: 0.4 },
   ],
+  // Arduino Uno (ATmega328P): 20 mA per pin recommended, 40 mA absolute maximum.
+  arduino: [{ quantity: 'current', max: 0.02, burn: 0.04 }],
   // A battery doesn't burn out here, but more than 1 A from a 9 V battery means a short circuit.
   battery: [{ quantity: 'current', max: 1, burn: Infinity }],
 };
@@ -70,6 +72,8 @@ export interface Stress extends Limit {
 function measure(kind: PartKind, q: Quantity, r: PartReading): number {
   switch (q) {
     case 'current':
+      // Arduino: the busiest input/output pin.
+      if (kind === 'arduino') return Math.max(...r.i.slice(0, UNO.io).map(Math.abs));
       // Transistor: its collector. Bridge: its + output. 555: its output pin.
       return Math.abs(kind === 'npn' ? r.i[1] : kind === 'bridge' ? r.i[2] : kind === 'timer555' ? r.i[2] : r.i[0]);
     case 'power':

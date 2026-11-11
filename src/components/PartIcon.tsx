@@ -148,6 +148,15 @@ function paths(kind: PartKind) {
           </text>
         </>
       );
+    case 'arduino':
+      return (
+        <>
+          <rect x="4" y="4" width="32" height="16" rx="2" />
+          <path d="M8 4V2M12 4V2M16 4V2M24 4V2M28 4V2M32 4V2M12 20v2M16 20v2M24 20v2M28 20v2" />
+          <rect x="1" y="7" width="6" height="5" rx="0.8" />
+          <rect x="22" y="13" width="11" height="4" rx="0.8" fill="currentColor" stroke="none" />
+        </>
+      );
     case 'wire':
       return (
         <>

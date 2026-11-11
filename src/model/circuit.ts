@@ -3,6 +3,7 @@
  * Every function here is pure (returns a new circuit, never mutates), which is
  * what makes undo/redo simple.
  */
+import { BLINK_SKETCH } from '../arduino/examples';
 import { PART_DEFS, rotateDir, rotatePoint, type Dir, type PartKind, type Rotation, type Wave } from './parts';
 
 export interface Pt {
@@ -28,6 +29,8 @@ export interface Part {
   /** AC source: frequency, Hz (default 50), and wave shape (default sine). */
   freq?: number;
   wave?: Wave;
+  /** Arduino: the sketch (Arduino code) it runs. */
+  sketch?: string;
   /** Set when the part was overloaded and burned out. A burned part conducts nothing. */
   burn?: BurnInfo;
 }
@@ -44,7 +47,7 @@ export interface BurnInfo {
   i: number[];
 }
 
-export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'freq' | 'wave' | 'burn'>>;
+export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'freq' | 'wave' | 'sketch' | 'burn'>>;
 
 export interface PinRef {
   part: string;
@@ -101,7 +104,10 @@ export function nextRef(c: Circuit, kind: PartKind): string {
 }
 
 export function createPart(kind: PartKind, x: number, y: number): Part {
-  return { id: newId('p'), kind, ref: '', x, y, rot: 0, value: PART_DEFS[kind].defaultValue };
+  const part: Part = { id: newId('p'), kind, ref: '', x, y, rot: 0, value: PART_DEFS[kind].defaultValue };
+  // A new Arduino comes with Blink, like a new board straight out of the box.
+  if (kind === 'arduino') part.sketch = BLINK_SKETCH;
+  return part;
 }
 
 /* ---------- Edits (pure) ---------- */

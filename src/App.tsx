@@ -574,6 +574,7 @@ export function App() {
           onReplace={replacePart}
           onRotate={rotateSelected}
           onDelete={deleteSelected}
+          arduinos={live.arduinos}
         />
         <button className="scrim" aria-label="Close panels" onClick={() => setPanelsOpen(false)} />
       </div>

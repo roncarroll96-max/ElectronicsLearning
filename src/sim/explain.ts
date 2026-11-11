@@ -3,7 +3,7 @@
  * and how to choose the right part. Numbers come from the actual circuit.
  */
 import type { BurnInfo, Part } from '../model/circuit';
-import { formatReading, formatValue } from '../model/parts';
+import { UNO, formatReading, formatValue } from '../model/parts';
 import type { PartReading } from './simulate';
 import type { Stress } from './ratings';
 import { standardUp } from '../model/values';
@@ -145,9 +145,24 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
             why: `${A(b.value)} flowed through its output pin; it can drive about 200 mA.`,
             fix: 'Put a resistor in series with whatever the output drives, or switch bigger loads with a transistor.',
           };
+    case 'arduino': {
+      const pin = worstUnoPin(b.i);
+      return {
+        headline,
+        why: `${A(b.value)} flowed through pin ${pin}. Each pin of the Uno’s chip is rated for 20 mA, and 40 mA is the absolute maximum: past it the pin, or the whole chip, is destroyed. A pin wired straight to an LED, to GND or to 5V with nothing to limit the current does this.`,
+        fix: 'Put a resistor in series with whatever the pin drives (220 Ω for an LED), and switch anything that needs more current (a motor, a lamp, a buzzer) with a transistor.',
+      };
+    }
     default:
       return { headline, why: `It was pushed to ${fmt(b.value, b.quantity)}, past its limit.`, fix: 'Reduce the current through it.' };
   }
+}
+
+/** The name of the Uno pin carrying the most current (as in the burn record's currents). */
+export function worstUnoPin(i: number[]): string {
+  let best = 0;
+  for (let k = 1; k < UNO.io; k++) if (Math.abs(i[k] ?? 0) > Math.abs(i[best] ?? 0)) best = k;
+  return best < 14 ? `D${best}` : `A${best - 14}`;
 }
 
 /** A warning for a part running above its rating but not (yet) burning. */

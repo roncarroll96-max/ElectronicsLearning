@@ -10,7 +10,10 @@ import { LiveEngine, type Speed } from './live';
 export type ToWorker =
   | { type: 'circuit'; circuit: Circuit | null; version: number; probes: [PinRef | null, PinRef | null]; restart: boolean }
   | { type: 'controls'; paused: boolean; speed: Speed; audio: boolean }
-  | { type: 'audioPort'; port: MessagePort };
+  | { type: 'audioPort'; port: MessagePort }
+  /** An Arduino's compiled program (its flash image), or null when it has none. */
+  | { type: 'program'; id: string; program: Uint8Array | null }
+  | { type: 'resetArduino'; id: string };
 
 // The worker's own postMessage (typed by hand: the project's types describe a page, not a worker).
 const post = (self as unknown as { postMessage(m: unknown, transfer: Transferable[]): void }).postMessage.bind(self);
@@ -76,6 +79,14 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
       break;
     case 'audioPort':
       audioPort = m.port;
+      break;
+    case 'program':
+      engine.setProgram(m.id, m.program);
+      kick();
+      break;
+    case 'resetArduino':
+      engine.resetArduino(m.id);
+      kick();
       break;
   }
 };

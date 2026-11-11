@@ -154,6 +154,32 @@ export const TRANSFORMER = { l1: 1, k: 0.99, r1: 5 };
  * It needs at least 4.5 V to work (it is treated as reset below 3 V) and
  * takes at most 16 V (18 V absolute maximum).
  */
+/**
+ * Arduino Uno (ATmega328P at 16 MHz, powered over USB). Pin figures from the
+ * ATmega328P datasheet at 5 V: an output pin sags about 0.5 V when it supplies
+ * or sinks 20 mA (so about 25 Ω inside), the pull-up is 20–50 kΩ (35 kΩ here),
+ * inputs read HIGH above about 0.6 × VCC and LOW below 0.3 × VCC with a
+ * little hysteresis between, and brown-out detection holds the chip in reset
+ * below 2.7 V. The board's 5 V comes from USB through a fuse and a switch
+ * (about 0.3 Ω); its 3.3 V regulator (LP2985) supplies up to 150 mA.
+ */
+export const ARDUINO = {
+  vcc: 5,
+  usbR: 0.3,
+  v33: 3.3,
+  r33: 1,
+  pinR: 25,
+  pullUp: 35e3,
+  /** Input switching points, as a fraction of VCC: rising past `rise` reads HIGH, falling below `fall` reads LOW. */
+  rise: 0.55,
+  fall: 0.45,
+  /** Below this VCC the chip is held in reset (brown-out detector, 2.7 V setting). */
+  brownOut: 2.7,
+  clock: 16e6,
+  /** Off switches: a tiny leak so no pin floats (1 nS). */
+  off: 1e-9,
+};
+
 export const TIMER555 = {
   divider: 5000,
   highDrop: 1.5,

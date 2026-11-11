@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { updatePart, type Circuit, type Part, type Wire } from '../model/circuit';
-import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, UNO, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
 import { explainBurn, explainHot } from '../sim/explain';
 import { ldrResistance } from '../sim/models';
 import { stressOf } from '../sim/ratings';
@@ -105,6 +105,19 @@ function rowsFor(part: Part, sim: SimResult): { rows: Row[]; note?: string } | n
           ['Power lost in diodes', formatReading(r.power, 'W')],
         ],
       };
+    case 'arduino': {
+      const g = v[UNO.gnd];
+      const busiest = Math.max(...i.slice(0, UNO.io).map(Math.abs));
+      return {
+        rows: [
+          ['5V pin', formatReading(v[UNO.v5] - g, 'V')],
+          ['3.3V pin', formatReading(v[UNO.v33] - g, 'V')],
+          ['Power from USB', formatReading(Math.max(0, -r.power), 'W')],
+          ['Busiest pin’s current', formatReading(busiest, 'A')],
+        ],
+        note: busiest > 0.02 ? 'A pin is supplying more than the 20 mA it’s rated for: add or raise its resistor.' : undefined,
+      };
+    }
     case 'timer555': {
       const g = v[P555.gnd];
       const vcc = v[P555.vcc] - g;
