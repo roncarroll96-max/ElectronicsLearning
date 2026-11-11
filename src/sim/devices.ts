@@ -29,7 +29,12 @@ export type Device =
   | (Base & { type: 'cap'; c: number; geq: number; ieq: number })
   | (Base & { type: 'pn'; is: number; nvt: number; vcrit: number; s: number[] })
   | (Base & { type: 'lamp' })
-  | (Base & { type: 'npn'; m: BjtModel; vcrit: number; s: number[] });
+  /**
+   * A transistor. In time-based simulation its stored charge adds a current
+   * qa·Q + qhf (base–emitter) and qa·Q + qhr (base–collector), set by the time
+   * stepper every step like a capacitor's companion model; qa = 0 means none (settled).
+   */
+  | (Base & { type: 'npn'; m: BjtModel; vcrit: number; s: number[]; qa: number; qhf: number; qhr: number });
 
 export interface Evaluation {
   i: number[];
@@ -62,14 +67,20 @@ export function limitJunction(vnew: number, vold: number, nvt: number, vcrit: nu
 const EXP_LIMIT = 80;
 
 /** Shockley current is·(e^(v/nvt) − 1) and its slope, continued linearly past e^80 to avoid overflow. */
-function shockley(v: number, is: number, nvt: number): [number, number] {
+/** Its results, left here rather than returned in a new array (this runs hundreds of thousands of times a second). */
+let shI = 0;
+let shG = 0;
+function shockley(v: number, is: number, nvt: number): void {
   const x = v / nvt;
   if (x > EXP_LIMIT) {
     const e = Math.exp(EXP_LIMIT);
-    return [is * (e * (1 + x - EXP_LIMIT) - 1), (is * e) / nvt];
+    shI = is * (e * (1 + x - EXP_LIMIT) - 1);
+    shG = (is * e) / nvt;
+    return;
   }
   const e = Math.exp(x);
-  return [is * (e - 1), (is * e) / nvt];
+  shI = is * (e - 1);
+  shG = (is * e) / nvt;
 }
 
 function lamp(v: number): [number, number] {
@@ -83,8 +94,27 @@ function lamp(v: number): [number, number] {
   return [Math.sign(v) * i, (LAMP.exponent * i) / a];
 }
 
-function twoTerminal(i: number, g: number, v0: number[], limited = false): Evaluation {
-  return { i: [i, -i], J: [g, -g, -g, g], v0, limited };
+/** Where an evaluation is written: reused from one Newton iteration to the next, so the loop allocates nothing. */
+export interface EvalBuffer {
+  i: Float64Array;
+  J: Float64Array;
+  v0: Float64Array;
+}
+
+/** A buffer sized for a device with m terminals. */
+export function evalBuffer(m: number): EvalBuffer {
+  return { i: new Float64Array(m), J: new Float64Array(m * m), v0: new Float64Array(m) };
+}
+
+function twoTerminal(out: EvalBuffer, i: number, g: number, va: number, vb: number): void {
+  out.i[0] = i;
+  out.i[1] = -i;
+  out.J[0] = g;
+  out.J[1] = -g;
+  out.J[2] = -g;
+  out.J[3] = g;
+  out.v0[0] = va;
+  out.v0[1] = vb;
 }
 
 /**
@@ -93,22 +123,33 @@ function twoTerminal(i: number, g: number, v0: number[], limited = false): Evalu
  * updated); without it, the device is evaluated exactly at v.
  * `scale` multiplies source voltages (used when ramping sources up).
  */
-export function evaluate(d: Device, v: number[], scale: number, limit: boolean): Evaluation {
+export function evaluate(d: Device, v: ArrayLike<number>, scale: number, limit: boolean): Evaluation {
+  const out = evalBuffer(d.t.length);
+  const limited = evaluateInto(d, v, scale, limit, out);
+  return { i: Array.from(out.i), J: Array.from(out.J), v0: Array.from(out.v0), limited };
+}
+
+/** Same as evaluate(), writing into `out`; returns whether the voltages were limited. */
+export function evaluateInto(d: Device, v: ArrayLike<number>, scale: number, limit: boolean, out: EvalBuffer): boolean {
   switch (d.type) {
     case 'g':
-      return twoTerminal(d.g * (v[0] - v[1]), d.g, v);
+      twoTerminal(out, d.g * (v[0] - v[1]), d.g, v[0], v[1]);
+      return false;
 
     case 'source':
       // A voltage source with internal resistance (Thevenin), written as its
       // Norton equivalent: current into + is g·(v+ − v− − V).
-      return twoTerminal(d.g * (v[0] - v[1] - d.v * scale), d.g, v);
+      twoTerminal(out, d.g * (v[0] - v[1] - d.v * scale), d.g, v[0], v[1]);
+      return false;
 
     case 'cap':
-      return twoTerminal(d.geq * (v[0] - v[1]) - d.ieq, d.geq, v);
+      twoTerminal(out, d.geq * (v[0] - v[1]) - d.ieq, d.geq, v[0], v[1]);
+      return false;
 
     case 'lamp': {
       const [i, g] = lamp(v[0] - v[1]);
-      return twoTerminal(i, g, v);
+      twoTerminal(out, i, g, v[0], v[1]);
+      return false;
     }
 
     case 'pn': {
@@ -125,13 +166,14 @@ export function evaluate(d: Device, v: number[], scale: number, limit: boolean):
         }
         d.s[0] = vd;
       }
-      const [i, g] = shockley(vd, d.is, d.nvt);
-      return twoTerminal(i + GMIN * vd, g + GMIN, [vd, 0], limited);
+      shockley(vd, d.is, d.nvt);
+      twoTerminal(out, shI + GMIN * vd, shG + GMIN, vd, 0);
+      return limited;
     }
 
     case 'npn': {
       // Terminals: base, collector, emitter.
-      const { is, bf, br } = d.m;
+      const { is, bf, br, tf, tr } = d.m;
       const rawBe = v[0] - v[2];
       const rawBc = v[0] - v[1];
       let vbe = rawBe;
@@ -150,29 +192,56 @@ export function evaluate(d: Device, v: number[], scale: number, limit: boolean):
         d.s[0] = vbe;
         d.s[1] = vbc;
       }
-      const [iF, gF] = shockley(vbe, is, VT);
-      const [iR, gR] = shockley(vbc, is, VT);
+      shockley(vbe, is, VT);
+      const iF = shI;
+      const gF = shG;
+      shockley(vbc, is, VT);
+      const iR = shI;
+      const gR = shG;
       // Ebers–Moll (transport form), plus GMIN across each junction.
-      const ic = iF - iR - iR / br - GMIN * vbc;
-      const ib = iF / bf + iR / br + GMIN * (vbe + vbc);
-      const ie = -(ic + ib);
-      // Partial derivatives with respect to Vbe and Vbc.
-      const icBe = gF;
-      const icBc = -gR - gR / br - GMIN;
-      const ibBe = gF / bf + GMIN;
-      const ibBc = gR / br + GMIN;
+      let ic = iF - iR - iR / br - GMIN * vbc;
+      let ib = iF / bf + iR / br + GMIN * (vbe + vbc);
+      let icBe = gF;
+      let icBc = -gR - gR / br - GMIN;
+      let ibBe = gF / bf + GMIN;
+      let ibBc = gR / br + GMIN;
+      // Stored (diffusion) charge, time-based only: τF·iF across base–emitter and τR·iR across
+      // base–collector. Its current, dQ/dt, uses the time stepper's formula, i = qa·Q + history.
+      if (d.qa !== 0) {
+        ib += d.qa * (tf * iF + tr * iR) + d.qhf + d.qhr;
+        ic -= d.qa * tr * iR + d.qhr;
+        ibBe += d.qa * tf * gF;
+        ibBc += d.qa * tr * gR;
+        icBc -= d.qa * tr * gR;
+      }
+      // Vbe = Vb − Ve and Vbc = Vb − Vc, so d/dVb = A + B, d/dVc = −B, d/dVe = −A.
       const ieBe = -(icBe + ibBe);
       const ieBc = -(icBc + ibBc);
-      // Vbe = Vb − Ve and Vbc = Vb − Vc, so d/dVb = A + B, d/dVc = −B, d/dVe = −A.
-      const row = (a: number, b: number) => [a + b, -b, -a];
-      return {
-        i: [ib, ic, ie],
-        J: [...row(ibBe, ibBc), ...row(icBe, icBc), ...row(ieBe, ieBc)],
-        v0: [vbe, vbe - vbc, 0],
-        limited,
-      };
+      const { i, J, v0 } = out;
+      i[0] = ib;
+      i[1] = ic;
+      i[2] = -(ic + ib);
+      J[0] = ibBe + ibBc;
+      J[1] = -ibBc;
+      J[2] = -ibBe;
+      J[3] = icBe + icBc;
+      J[4] = -icBc;
+      J[5] = -icBe;
+      J[6] = ieBe + ieBc;
+      J[7] = -ieBc;
+      J[8] = -ieBe;
+      v0[0] = vbe;
+      v0[1] = vbe - vbc;
+      v0[2] = 0;
+      return limited;
     }
   }
+}
+
+/** A transistor's stored charge (C) at junction voltage v, for transit time τ: τ·i. */
+export function storedCharge(m: BjtModel, tau: number, v: number): number {
+  shockley(v, m.is, VT);
+  return tau * shI;
 }
 
 /** Forgets Newton history so the next solve starts fresh. */

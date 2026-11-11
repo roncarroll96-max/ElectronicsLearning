@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import type { Circuit, Part } from '../model/circuit';
 import type { PartKind } from '../model/parts';
 import { AUDIO_RATE, LiveEngine, OVERSAMPLE } from './live';
+import { SPEAKER } from './models';
+import { TransientSim } from './transient';
 
 const P = (id: string, kind: PartKind, ref: string, value?: number): Part => ({
   id, kind, ref, x: 0, y: 0, rot: 0, ...(value !== undefined ? { value } : {}),
@@ -120,6 +122,53 @@ describe('live engine', () => {
     expect(levels.get('spk')!).toBeGreaterThan(0.003);
     console.log(`beeper: ${hz.toFixed(0)} Hz`);
   });
+
+  it('keeps up with a transistor tone in real time, at the pitch a fine-step simulation gives', () => {
+    // Each of this oscillator's 3,200 transistor flips a second is a sudden snap: the
+    // hardest thing for the simulator to keep up with.
+    const e = new LiveEngine();
+    e.setCircuit(beeper, 1, NO_PROBES, false);
+    e.setControls(false, 1, true);
+    for (let k = 0; k < 20; k++) e.run(0.005, 1000); // 0.1 s to start up (and for the code to warm up)
+    const chunks: Float32Array[] = [];
+    const t0 = performance.now();
+    for (let k = 0; k < 100; k++) {
+      const c = e.run(0.005, 1000); // 0.5 s in 5 ms chunks, as the worker does
+      expect(c).not.toBeNull();
+      chunks.push(c!);
+    }
+    const seconds = (performance.now() - t0) / 1000;
+    const speed = 0.5 / seconds;
+    // Real time with room to spare (it was 0.2× before the speed-up; about 1.8× on the machine it was tuned on).
+    expect(speed, `${speed.toFixed(2)}× real time`).toBeGreaterThan(1.5);
+
+    // Pitch, from the moments the sound rises through its middle (interpolated between samples).
+    const sound = Float32Array.from(chunks.flatMap((c) => Array.from(c)));
+    const mid = (Math.max(...sound) + Math.min(...sound)) / 2;
+    const rises = (wave: ArrayLike<number>, dt: number) => {
+      const t: number[] = [];
+      for (let k = 1; k < wave.length; k++)
+        if (wave[k - 1] < mid && wave[k] >= mid) t.push((k - 1 + (mid - wave[k - 1]) / (wave[k] - wave[k - 1])) * dt);
+      return (t.length - 1) / (t[t.length - 1] - t[0]);
+    };
+    const hz = rises(sound, 1 / AUDIO_RATE);
+
+    // Reference: the same circuit in 0.25 µs steps, where every flip is followed through nanosecond by nanosecond.
+    const fine = new TransientSim(beeper);
+    const h = 2.5e-7;
+    const spk = (s: TransientSim) => ((s.voltageAt({ part: 'spk', pin: 0 })! - s.voltageAt({ part: 'spk', pin: 1 })!) / SPEAKER.r) / SPEAKER.fullScale;
+    for (let k = 0; k < 0.004 / h; k++) fine.step(h); // start-up
+    const wave: number[] = [];
+    for (let k = 0; k < 0.012 / h; k++) {
+      fine.step(h);
+      wave.push(spk(fine));
+    }
+    const ref = rises(wave, h);
+    expect(ref).toBeGreaterThan(1500); // about 1.6 kHz
+    expect(ref).toBeLessThan(1700);
+    expect(Math.abs(hz / ref - 1), `${hz.toFixed(1)} Hz vs ${ref.toFixed(1)} Hz`).toBeLessThan(0.01);
+    console.log(`beeper live: ${speed.toFixed(2)}× real time, ${hz.toFixed(1)} Hz (fine steps: ${ref.toFixed(1)} Hz)`);
+  }, { retry: 2 }); // a timing test: another busy program on the machine can slow one run down
 
   it('makes no sound in slow motion (the pitch would be wrong) or with sound switched off', () => {
     const e = new LiveEngine();

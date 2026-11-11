@@ -91,8 +91,18 @@ export interface BjtModel {
   bf: number;
   /** Reverse current gain. */
   br: number;
+  /**
+   * Forward and reverse transit times, s. A conducting transistor holds charge
+   * in its base, in proportion to its current (Q = τ·I), and that charge has to
+   * flow in or out before the current can change: this is why a transistor
+   * takes time to switch, and why one driven hard into saturation (where the
+   * reverse charge τR builds up) is slow to turn off. Time-based simulation only.
+   */
+  tf: number;
+  tr: number;
 }
-export const NPN_2N3904: BjtModel = { is: 6.734e-15, bf: 200, br: 0.7371 };
+/** τF and τR from the standard 2N3904 SPICE model (TF = 301.2 ps, TR = 239.5 ns). */
+export const NPN_2N3904: BjtModel = { is: 6.734e-15, bf: 200, br: 0.7371, tf: 301.2e-12, tr: 239.5e-9 };
 
 /**
  * Incandescent lamp rated 9 V, 50 mA. A tungsten filament's resistance rises

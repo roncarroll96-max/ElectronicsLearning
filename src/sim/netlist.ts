@@ -150,6 +150,9 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
           m: M.NPN_2N3904,
           vcrit: criticalVoltage(M.NPN_2N3904.is, M.VT),
           s: [NaN, NaN],
+          qa: 0,
+          qhf: 0,
+          qhr: 0,
         });
         junctionCap(0, 2, M.JUNCTION_C.npnBe);
         junctionCap(0, 1, M.JUNCTION_C.npnBc);
