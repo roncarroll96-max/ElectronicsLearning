@@ -62,6 +62,14 @@ export function SchematicBody({ part }: { part: Part }) {
           <path className="sym thin" d="M-5 -5v10l6 4V-9z" />
         </>
       );
+    case 'speaker':
+      return (
+        <>
+          <path className="sym" d="M-40 0H-12M8 0H40" />
+          <rect className="sym" x="-12" y="-7" width="8" height="14" />
+          <path className="sym" d="M-4 -7L8 -17V17L-4 7" />
+        </>
+      );
     case 'switch':
       return (
         <>
@@ -186,6 +194,18 @@ export function RealisticBody({ part }: { part: Part }) {
           <circle r="11" fill="none" stroke="#2a2f38" />
           <circle r="3.5" fill="#363b45" />
           <path d="M-12 -12h4M-10 -14v4" stroke="#cfd4dc" strokeWidth="1.4" />
+        </>
+      );
+    case 'speaker':
+      return (
+        <>
+          <path className="lead" d="M-40 0H-19M19 0H40" />
+          <circle r="19" fill="#20242b" stroke="#0e1013" />
+          <circle r="15.5" fill="#3a404b" />
+          <circle r="15.5" fill="none" stroke="#525a67" strokeDasharray="1.5 2.5" />
+          <circle r="9" fill="#2c3139" />
+          <circle r="5" fill="#59606e" />
+          <circle cx="-1.5" cy="-1.5" r="1.8" fill="#fff" opacity="0.2" />
         </>
       );
     case 'switch':

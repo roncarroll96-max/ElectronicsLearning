@@ -2796,3 +2796,27 @@ kbd {
     scale: 0.85;
   }
 }
+
+/* ---------- Milestone 2, step 3: sound ---------- */
+
+.sound-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sound-ctl.on .icon-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sound-volume {
+  width: 72px;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 960px) {
+  .sound-volume {
+    width: 48px;
+  }
+}

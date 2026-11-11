@@ -1,33 +1,23 @@
 /**
  * Runs the simulator live. A circuit without capacitors has nothing that
- * changes over time, so it is solved once (the settled state). A circuit with
- * capacitors runs in time: a few hundred small steps every animation frame,
- * paced to real time (or slowed down), pausing by itself once everything has
- * settled so the computer isn't working for nothing.
+ * changes over time, so it is solved once, here (the settled state). A circuit
+ * with capacitors runs in time in a background worker (src/sim/worker.ts),
+ * paced to real time or slowed down, pausing by itself once everything has
+ * settled; this hook sends it each change and shows what it sends back.
  *
- * It also keeps a "heat" view of the readings for burnouts and hot warnings:
- * real parts are destroyed by heat building up, not by a spike lasting a few
- * milliseconds (a capacitor's first gulp of current, say), so ratings are
- * judged on readings averaged over a short thermal time constant.
+ * Ratings (burnouts, running hot, the meter's fuse) use the worker's "heat"
+ * view: readings averaged over a short thermal time constant, because real
+ * parts are destroyed by heat building up, not by a millisecond spike.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { pinKey, type Circuit, type PinRef } from '../model/circuit';
+import type { Circuit, PinRef } from '../model/circuit';
 import { Trace } from '../scope/trace';
-import { simulate, type PartReading, type SimResult } from '../sim/simulate';
-import { TransientSim } from '../sim/transient';
+import { probesKey, usesTime, type Frame, type Speed } from '../sim/live';
+import { simulate, type SimResult } from '../sim/simulate';
+import { TransientSim, type CapStates } from '../sim/transient';
+import type { ToWorker } from '../sim/worker';
 
-/** Normal step size: 0.2 ms of circuit time (slow motion shrinks it in proportion). */
-export const BASE_STEP = 2e-4;
-/** Playback speeds: real time, then slow motion. */
-export const SPEEDS = [1, 0.25, 0.1, 0.01] as const;
-export type Speed = (typeof SPEEDS)[number];
-
-/** Most computing time to spend per animation frame, ms (a frame is about 16 ms). */
-const FRAME_BUDGET_MS = 8;
-/** How long heat takes to build up in a small part, s. */
-const THERMAL_TAU = 0.05;
-/** A step that changes no capacitor by more than this (V) means the circuit has settled. */
-const SETTLED_DV = 1e-6;
+export { BASE_STEP, SPEEDS, type Speed } from '../sim/live';
 
 export interface LiveSim {
   /** Every voltage and current right now. */
@@ -50,136 +40,122 @@ export interface LiveSim {
   restart: () => void;
   /** The oscilloscope's record of its two probes, sampled every step (empty for circuits that don't change over time). */
   trace: Trace;
+  /** How loudly each speaker is sounding (the changing part of its current, rms, A). */
+  levels: ReadonlyMap<string, number>;
+  /** Gives the worker a port to the audio thread, for speaker sound. */
+  connectAudio: (port: MessagePort) => void;
 }
 
-const usesTime = (c: Circuit) => c.parts.some((p) => p.kind === 'capacitor' && !p.burn);
-
-/** `probes`: the pins the oscilloscope's two channels touch (null = not attached). */
-export function useLiveSim(c: Circuit, probes: [PinRef | null, PinRef | null] = [null, null]): LiveSim {
+/**
+ * `probes`: the pins the oscilloscope's two channels touch (null = not attached).
+ * `audio`: sound is switched on, so the worker should produce speaker sound.
+ */
+export function useLiveSim(c: Circuit, probes: [PinRef | null, PinRef | null] = [null, null], audio = false): LiveSim {
   const timed = usesTime(c);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
-  const [lagging, setLagging] = useState(false);
   const [generation, setGeneration] = useState(0);
-  const [tick, setTick] = useState(0);
-
-  // The scope's record. Moving a probe starts a fresh record, so old readings from another pin never mix in.
+  const [frame, setFrame] = useState<Frame | null>(null);
   const trace = useRef(new Trace()).current;
-  const probesRef = useRef(probes);
-  probesRef.current = probes;
-  const probeKey = probes.map((p) => (p ? pinKey(p) : '-')).join('|');
-  useEffect(() => trace.clear(), [probeKey, generation, trace]);
 
-  // The stepper for the current circuit. Rebuilt on every change, carrying the
-  // capacitors' charge and the clock across (unless restarting).
-  const prev = useRef<{ engine: TransientSim; generation: number } | null>(null);
-  const engine = useMemo(() => {
+  // The worker, started when first needed and kept for the life of the page.
+  const worker = useRef<Worker | null>(null);
+  const getWorker = useCallback(() => {
+    if (!worker.current) {
+      worker.current = new Worker(new URL('../sim/worker.ts', import.meta.url), { type: 'module' });
+      worker.current.onmessage = (e: MessageEvent<Frame>) => onFrame.current(e.data);
+    }
+    return worker.current;
+  }, []);
+  useEffect(
+    () => () => {
+      worker.current?.terminate();
+      worker.current = null;
+    },
+    [],
+  );
+  const send = useCallback((m: ToWorker, transfer: Transferable[] = []) => getWorker().postMessage(m, transfer), [getWorker]);
+
+  // Each change of circuit, probes or power gets a new version number; frames
+  // about an older version are ignored, so a reading never belongs to the wrong circuit.
+  const key = probesKey(probes);
+  const versionRef = useRef(0);
+  const lastGen = useRef(generation);
+  const lastKey = useRef(key);
+  const carry = useRef<{ caps: CapStates; time: number } | null>(null);
+  // The first version after the last power-on: older frames mustn't bring back charge from before it.
+  const powerOnVersion = useRef(0);
+
+  const version = useMemo(() => {
+    versionRef.current += 1;
+    return versionRef.current;
+    // A new version whenever the circuit, the probes or the power-on count change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c, key, generation, timed]);
+
+  // While the worker's first frame for this version is on its way, show the
+  // same starting state computed here: capacitors holding the charge they had.
+  const provisional = useMemo<SimResult>(() => {
+    if (!timed) return simulate(c);
+    const restart = generation !== lastGen.current;
+    const from = restart ? null : carry.current;
+    return new TransientSim(c, from?.caps, from?.time ?? 0).result();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
+
+  useEffect(() => {
+    const restart = generation !== lastGen.current;
+    const moved = key !== lastKey.current;
+    lastGen.current = generation;
+    lastKey.current = key;
+    if (restart) {
+      carry.current = null;
+      powerOnVersion.current = version;
+      trace.clear();
+    }
+    if (moved) trace.clear();
     if (!timed) {
-      prev.current = null;
-      return null;
+      if (worker.current) send({ type: 'circuit', circuit: null, version, probes, restart });
+      return;
     }
-    const p = prev.current;
-    const carry = p && p.generation === generation ? p.engine : null;
-    const e = new TransientSim(c, carry?.capStates(), carry?.time ?? 0);
-    prev.current = { engine: e, generation };
-    return e;
-  }, [c, timed, generation]);
+    send({ type: 'circuit', circuit: c, version, probes, restart });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
 
-  const dc = useMemo(() => (timed ? null : simulate(c)), [c, timed]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const sim = useMemo(() => (engine ? engine.result() : dc!), [engine, dc, tick]);
-
-  // Heat: an exponential average of each part's readings over circuit time.
-  const heat = useRef(new Map<string, PartReading>());
-  const [settledFor, setSettledFor] = useState<TransientSim | null>(null);
-  const settled = !!engine && settledFor === engine;
-
-  const blend = useCallback((now: SimResult, dt: number) => {
-    const a = Number.isFinite(dt) ? 1 - Math.exp(-dt / THERMAL_TAU) : 1;
-    const next = new Map<string, PartReading>();
-    for (const [id, r] of now.parts) {
-      const h = heat.current.get(id);
-      if (!h || h.i.length !== r.i.length || a >= 1) {
-        next.set(id, { v: [...r.v], i: [...r.i], power: r.power });
-      } else {
-        next.set(id, {
-          v: r.v.map((v, k) => h.v[k] + a * (v - h.v[k])),
-          i: r.i.map((i, k) => h.i[k] + a * (i - h.i[k])),
-          power: h.power + a * (r.power - h.power),
-        });
-      }
-    }
-    heat.current = next;
-  }, []);
-
-  // A new circuit (or a restart): the settled flag no longer applies.
   useEffect(() => {
-    setLagging(false);
-    if (!engine) heat.current = new Map();
-  }, [engine]);
+    if (timed || worker.current) send({ type: 'controls', paused, speed, audio });
+  }, [paused, speed, audio, timed, send]);
 
-  // The animation loop.
-  useEffect(() => {
-    if (!engine || !engine.dynamic || paused || settled) return;
-    let frame = 0;
-    let last = performance.now();
-    const loop = (now: number) => {
-      const elapsed = Math.min(0.1, (now - last) / 1000); // a background tab doesn't build up a backlog
-      last = now;
-      const h = BASE_STEP * speed;
-      const wanted = Math.round((elapsed * speed) / h);
-      const start = performance.now();
-      let done = 0;
-      let biggest = 0;
-      while (done < wanted && performance.now() - start < FRAME_BUDGET_MS) {
-        if (!engine.step(h)) break;
-        biggest = Math.max(biggest, engine.lastChange);
-        const [p1, p2] = probesRef.current;
-        if (p1 || p2) trace.push(engine.time, p1 ? (engine.voltageAt(p1) ?? NaN) : NaN, p2 ? (engine.voltageAt(p2) ?? NaN) : NaN);
-        done++;
-      }
-      setLagging(done < wanted);
-      const result = engine.result();
-      if (done > 0 && biggest < SETTLED_DV) {
-        blend(result, Infinity); // settled: the heat has caught up too
-        setSettledFor(engine);
-      } else {
-        blend(result, done * h);
-      }
-      setTick((t) => t + 1);
-      frame = requestAnimationFrame(loop);
-    };
-    frame = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frame);
-  }, [engine, paused, settled, speed, blend, trace]);
+  const onFrame = useRef((_f: Frame) => {});
+  onFrame.current = (f: Frame) => {
+    if (f.version >= powerOnVersion.current) carry.current = { caps: f.caps, time: f.time };
+    if (f.version !== versionRef.current) return;
+    if (f.trace) for (let k = 0; k < f.trace.t.length; k++) trace.push(f.trace.t[k], f.trace.a[k], f.trace.b[k]);
+    setFrame(f);
+  };
 
-  // Heat view: the averaged readings, in the same shape as the live result.
-  const stress = useMemo<SimResult>(() => {
-    if (!engine) return sim;
-    // Parts the average hasn't seen yet (just added) use their live reading.
-    const parts = new Map<string, PartReading>();
-    for (const [id, r] of sim.parts) parts.set(id, heat.current.get(id) ?? r);
-    return { ...sim, parts };
-  }, [engine, sim]);
+  const current = timed && frame && frame.version === version ? frame : null;
+  const sim = current ? current.result : provisional;
+  const stress = useMemo<SimResult>(() => (current ? { ...current.result, parts: current.heat } : sim), [current, sim]);
+  const levels = useMemo(() => new Map(current?.levels ?? []), [current]);
 
-  const restart = useCallback(() => {
-    heat.current = new Map();
-    setSettledFor(null);
-    setGeneration((g) => g + 1);
-  }, []);
+  const restart = useCallback(() => setGeneration((g) => g + 1), []);
+  const connectAudio = useCallback((port: MessagePort) => send({ type: 'audioPort', port }, [port]), [send]);
 
   return {
     sim,
     stress,
-    dynamic: !!engine?.dynamic,
-    time: engine?.time ?? 0,
-    settled,
+    dynamic: timed,
+    time: current?.time ?? (generation !== lastGen.current ? 0 : (carry.current?.time ?? 0)),
+    settled: !!current?.settled,
     paused,
     setPaused,
     speed,
     setSpeed,
-    lagging: lagging && !paused && !settled,
+    lagging: !!current?.lagging && !paused,
     restart,
     trace,
+    levels,
+    connectAudio,
   };
 }

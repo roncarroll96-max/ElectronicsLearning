@@ -103,6 +103,14 @@ function paths(kind: PartKind) {
           <path d="M10 6h8v12h-8zM18 6l10-4v20l-10-4" />
         </>
       );
+    case 'speaker':
+      return (
+        <>
+          <path d="M2 12h10M28 12h10" />
+          <path d="M12 8h5v8h-5zM17 8l7-5v18l-7-5" />
+          <path d="M28 7a7 7 0 0 1 0 10" />
+        </>
+      );
     case 'wire':
       return (
         <>

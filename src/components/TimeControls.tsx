@@ -14,8 +14,18 @@ export function formatTime(t: number): string {
  * The clock for circuits that change over time (anything with a capacitor):
  * time since power-on, pause/play, slow motion, and "power off and on".
  */
-export function TimeControls({ live }: { live: LiveSim }) {
-  const status = live.paused ? 'Paused' : live.settled ? 'Settled: nothing is changing' : live.lagging ? 'Running slower than shown' : 'Running';
+export function TimeControls({ live, speakerSound = false }: { live: LiveSim; speakerSound?: boolean }) {
+  const status = live.paused
+    ? 'Paused'
+    : live.settled
+      ? 'Settled: nothing is changing'
+      : live.lagging
+        ? speakerSound
+          ? 'Too demanding to play live: sound paused'
+          : 'Running slower than shown'
+        : speakerSound && live.speed !== 1
+          ? 'Sound plays at real-time speed only'
+          : 'Running';
   return (
     <div className="time-controls" role="group" aria-label="Circuit time">
       <button

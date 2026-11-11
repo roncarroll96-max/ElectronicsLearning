@@ -80,7 +80,11 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
     };
     const resistor = (a: number, b: number, ohms: number) =>
       devices.push({ type: 'g', lt: [a, b], t: [], g: 1 / Math.max(ohms, M.MIN_R) });
-    const diode = (a: number, k: number, m: M.DiodeModel) => {
+    // Time-based only: a junction's own small capacitance, across it.
+    const junctionCap = (a: number, b: number, farads: number) => {
+      if (opts.capacitors === 'companion') devices.push({ type: 'cap', lt: [a, b], t: [], c: farads, geq: 0, ieq: 0 });
+    };
+    const diode = (a: number, k: number, m: M.DiodeModel, cj = 0) => {
       let j = a;
       if (m.rs > 0) {
         j = addInternal();
@@ -88,6 +92,7 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
       }
       const nvt = m.n * M.VT;
       devices.push({ type: 'pn', lt: [j, k], t: [], is: m.is, nvt, vcrit: criticalVoltage(m.is, nvt), s: [NaN] });
+      if (cj > 0) junctionCap(j, k, cj);
     };
 
     // A burned-out part is broken open: it conducts nothing.
@@ -123,13 +128,16 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         if (part.on) resistor(0, 1, M.SWITCH_R);
         break;
       case 'led':
-        diode(0, 1, M.LED_RED);
+        diode(0, 1, M.LED_RED, M.JUNCTION_C.led);
         break;
       case 'diode':
-        diode(0, 1, M.DIODE_1N4148);
+        diode(0, 1, M.DIODE_1N4148, M.JUNCTION_C.diode);
         break;
       case 'buzzer':
         diode(0, 1, M.BUZZER);
+        break;
+      case 'speaker':
+        resistor(0, 1, M.SPEAKER.r);
         break;
       case 'lamp':
         devices.push({ type: 'lamp', lt: [0, 1], t: [] });
@@ -143,6 +151,8 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
           vcrit: criticalVoltage(M.NPN_2N3904.is, M.VT),
           s: [NaN, NaN],
         });
+        junctionCap(0, 2, M.JUNCTION_C.npnBe);
+        junctionCap(0, 1, M.JUNCTION_C.npnBc);
         break;
       case 'capacitor':
         // Settled (DC): a charged capacitor blocks current, so it is an open circuit.

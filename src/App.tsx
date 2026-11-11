@@ -17,7 +17,8 @@ import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterSta
 import { deleteItems, EMPTY_CIRCUIT, newId, rotateParts, updatePart, type Circuit } from './model/circuit';
 import type { PartKind } from './model/parts';
 import { worstBurnout } from './sim/ratings';
-import { useLiveSim } from './state/useLiveSim';
+import { useLiveSim, type LiveSim } from './state/useLiveSim';
+import { useSound } from './audio/sound';
 import { TimeControls } from './components/TimeControls';
 import { INITIAL_SCOPE, scopePins, type ScopeState } from './scope/scope';
 import { ScopePanel } from './scope/ScopePanel';
@@ -99,7 +100,12 @@ export function App() {
   // Solved once for a circuit without capacitors; run live in time for one with them.
   const [scope, setScope] = useState<ScopeState>(INITIAL_SCOPE);
   const scopeAt = useMemo(() => scopePins(liveCircuit, scope), [liveCircuit, scope]);
-  const live = useLiveSim(simCircuit, scopeAt);
+  // Sound: once started, the audio thread gets a private line from the simulator's thread (for speakers).
+  const liveRef = useRef<LiveSim | null>(null);
+  const sound = useSound((port) => liveRef.current?.connectAudio(port));
+  const live = useLiveSim(simCircuit, scopeAt, sound.on);
+  liveRef.current = live;
+  const hasSpeaker = simCircuit.parts.some((p) => p.kind === 'speaker' && !p.burn);
   const sim = live.sim;
   const restartTime = live.restart;
   const simStatus: SimStatus = sim.idle ? 'idle' : sim.ok ? 'running' : 'failed';
@@ -289,6 +295,25 @@ export function App() {
     },
   };
 
+  /* ---------- The buzzer's tone ---------- */
+  // An active buzzer makes its own tone whenever enough current flows (more current, louder).
+  const lastBuzz = useRef(-1);
+  useEffect(() => {
+    let level = 0;
+    if (sound.on && !(live.dynamic && live.paused) && sim.ok && !sim.idle) {
+      for (const p of liveCircuit.parts) {
+        if (p.kind !== 'buzzer' || p.burn) continue;
+        const i = sim.parts.get(p.id)?.i[0] ?? 0;
+        if (i > 0.005) level = Math.max(level, Math.min(1, i / 0.025));
+      }
+    }
+    level = Math.round(level * 50) / 50;
+    if (level !== lastBuzz.current) {
+      lastBuzz.current = level;
+      sound.setBuzz(level);
+    }
+  }, [sim, sound, live.dynamic, live.paused, liveCircuit.parts]);
+
   /* ---------- Burnouts ---------- */
   const [burnNotice, setBurnNotice] = useState<string | null>(null);
   const lastCircuit = useRef(circuit);
@@ -431,6 +456,7 @@ export function App() {
         onTogglePanels={() => setPanelsOpen((o) => !o)}
         menuOpen={menuOpen}
         onToggleMenu={() => setMenuOpen((o) => !o)}
+        sound={sound}
       />
       {menuOpen && <CircuitsMenu api={menu} onClose={() => setMenuOpen(false)} />}
       <div className="workspace">
@@ -451,6 +477,7 @@ export function App() {
           onDelete={deleteSelected}
           sim={sim}
           stress={live.stress}
+          soundLevels={live.levels}
           meter={meter}
           onMeter={setMeter}
           scope={scope}
@@ -458,7 +485,7 @@ export function App() {
           onPress={onPress}
           focus={helpIssue ? { parts: helpIssue.parts, pins: helpIssue.pins } : undefined}
         >
-          {live.dynamic && <TimeControls live={live} />}
+          {live.dynamic && <TimeControls live={live} speakerSound={hasSpeaker && sound.on} />}
           {scope.open && (
             <ScopePanel
               scope={scope}

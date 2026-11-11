@@ -99,7 +99,7 @@ export function PartGlow({ part, view, live }: { part: Part; view: View; live: P
       </g>
     );
   }
-  if (part.kind === 'buzzer' && live.sound) {
+  if ((part.kind === 'buzzer' || part.kind === 'speaker') && live.sound) {
     return (
       <g className="live-fx sound-waves">
         <path d="M21 -7a10 10 0 0 1 0 14" />

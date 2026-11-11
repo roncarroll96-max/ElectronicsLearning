@@ -35,7 +35,8 @@ const GROUPS: PartGroup[] = [
     parts: [
       { kind: 'led', name: 'LED', hint: 'Lights up' },
       { kind: 'lamp', name: 'Lamp', hint: 'Incandescent' },
-      { kind: 'buzzer', name: 'Buzzer', hint: 'Makes sound' },
+      { kind: 'buzzer', name: 'Buzzer', hint: 'Beeps on DC' },
+      { kind: 'speaker', name: 'Speaker', hint: 'Plays the signal' },
     ],
   },
   {

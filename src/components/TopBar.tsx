@@ -1,4 +1,5 @@
 import type { Theme } from '../state/theme';
+import type { Sound } from '../audio/sound';
 
 export type Mode = 'learn' | 'sandbox';
 export type View = 'realistic' | 'schematic';
@@ -13,9 +14,10 @@ interface Props {
   onTogglePanels: () => void;
   menuOpen: boolean;
   onToggleMenu: () => void;
+  sound: Sound;
 }
 
-export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu }: Props) {
+export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu, sound }: Props) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -57,6 +59,40 @@ export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTog
           </svg>
           <span className="circuits-label">My circuits</span>
         </button>
+        <div className={`sound-ctl${sound.on ? ' on' : ''}`}>
+          <button
+            className="icon-btn"
+            onClick={sound.toggle}
+            aria-pressed={sound.on}
+            aria-label={sound.on ? 'Turn sound off' : 'Turn sound on'}
+            title={sound.on ? (sound.waiting ? 'Sound is on: click anywhere to let the browser play it' : 'Sound on') : 'Sound off: click to hear buzzers and speakers'}
+          >
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 8h3l4-3.5v11L6 12H3z" />
+              {sound.on ? (
+                <>
+                  <path d="M13 7.5a3.5 3.5 0 0 1 0 5" />
+                  <path d="M15.5 5a7 7 0 0 1 0 10" />
+                </>
+              ) : (
+                <path d="M13.5 7.5l4 5M17.5 7.5l-4 5" />
+              )}
+            </svg>
+          </button>
+          {sound.on && (
+            <input
+              type="range"
+              className="sound-volume"
+              min={0}
+              max={1}
+              step={0.05}
+              value={sound.volume}
+              onChange={(e) => sound.setVolume(Number(e.target.value))}
+              aria-label="Volume"
+              title="Volume"
+            />
+          )}
+        </div>
         <div className="segmented small" role="group" aria-label="Canvas view">
           <button className={view === 'realistic' ? 'on' : ''} onClick={() => onView('realistic')}>
             Realistic

@@ -75,6 +75,12 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
         why: `${A(b.value)} flowed through it; it’s made for about 30 mA, from a 3–12 V supply.`,
         fix: 'Keep its supply between 3 V and 12 V.',
       };
+    case 'speaker':
+      return {
+        headline,
+        why: `${W(b.value)} went into its voice coil; a small speaker like this takes about 0.5 W. Its coil is only 8 Ω, so even a 9 V battery straight across it pushes over an amp through it.`,
+        fix: 'Never connect a speaker straight across a battery. Drive it through a resistor (100 Ω or more), or from a transistor with a resistor in series.',
+      };
     case 'npn': {
       const ib = b.i[0];
       if (b.quantity === 'power' && ib > 0.05) {

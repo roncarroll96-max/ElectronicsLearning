@@ -76,6 +76,19 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         yours: ctx.r ? (ctx.r.i[0] > 0.005 ? `It’s sounding, drawing ${A(ctx.r.i[0])}.` : 'It’s silent: not enough current reaches it.') : undefined,
         math: [],
       };
+    case 'speaker':
+      return {
+        role: 'Sound maker',
+        goal: 'Turn a changing current into sound: the current pushes the cone in and out, and the cone pushes the air.',
+        reasoning:
+          'Unlike a buzzer, a speaker has no oscillator of its own: steady (DC) current just holds the cone pushed out, silently. To make a tone, the circuit has to change the current hundreds or thousands of times a second; the pitch you hear is how many times a second it changes. Its coil is only 8 Ω, so it always needs something limiting the current.',
+        yours: ctx.r
+          ? Math.abs(ctx.r.i[0]) > 1e-4
+            ? `${A(Math.abs(ctx.r.i[0]))} flows through it right now. If that current is changing quickly, you hear a tone (turn the sound on in the top bar).`
+            : 'Almost no current flows through it, so it is silent.'
+          : undefined,
+        math: ctx.r ? [`Power = I² × R = (${A(Math.abs(ctx.r.i[0]))})² × 8 Ω = ${W(ctx.r.i[0] ** 2 * 8)} (it takes about 0.5 W)`] : [],
+      };
     case 'switch':
     case 'pushbutton':
       return {

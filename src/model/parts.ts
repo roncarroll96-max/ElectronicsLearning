@@ -15,6 +15,7 @@ export type PartKind =
   | 'led'
   | 'lamp'
   | 'buzzer'
+  | 'speaker'
   | 'switch'
   | 'pushbutton'
   | 'diode'
@@ -133,6 +134,13 @@ export const PART_DEFS: Record<PartKind, PartDef> = {
     prefix: 'BZ',
     pins: twoPin('+', '−'),
     bounds: { x: -20, y: -20, w: 40, h: 40 },
+  },
+  speaker: {
+    kind: 'speaker',
+    name: 'Speaker',
+    prefix: 'SPK',
+    pins: twoPin('+', '−'),
+    bounds: { x: -20, y: -22, w: 40, h: 44 },
   },
   switch: {
     kind: 'switch',

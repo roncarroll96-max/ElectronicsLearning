@@ -62,6 +62,8 @@ export class TransientSim {
   private sol: Solution;
   private readonly hasSource: boolean;
   private readonly pinNodes: Map<string, number[]>;
+  /** Length of the last step taken: BDF2's formula assumes equal steps, so a different one restarts it. */
+  private lastH = 0;
 
   /**
    * Builds the stepper for a circuit. `carry` holds capacitor voltages from
@@ -76,12 +78,15 @@ export class TransientSim {
     this.pinNodes = new Map(this.net.parts.map((p) => [p.part.id, p.pinNodes]));
     this.caps = [];
     for (const pn of this.net.parts) {
+      let k = 0;
       for (const d of pn.devices) {
         if (d.type !== 'cap') continue;
-        d.c *= 1 + mismatch(pn.part.id);
-        const old = carry?.get(pn.part.id);
+        // A capacitor part is its own id; a transistor's or diode's junction capacitances are "id#1", "id#2"…
+        const id = pn.part.kind === 'capacitor' ? pn.part.id : `${pn.part.id}#${++k}`;
+        d.c *= 1 + mismatch(id);
+        const old = carry?.get(id);
         this.caps.push({
-          id: pn.part.id,
+          id,
           device: d,
           nodes: [d.t[0], d.t[1]],
           // After any change, restart the formula: keep the voltage, drop the older history.
@@ -90,7 +95,8 @@ export class TransientSim {
       }
     }
     // Before the first step: the circuit with every capacitor holding its voltage.
-    this.sol = this.solveStep(Infinity);
+    this.sol = this.solveStep(Infinity, false);
+    this.saveJunctions();
   }
 
   /** Whether this circuit can change over time: it has a capacitor that is powered, or still charged. */
@@ -103,35 +109,82 @@ export class TransientSim {
     return Math.max(0, ...this.caps.map((c) => (c.history.steps > 0 ? Math.abs(c.history.v - c.history.vPrev) : Infinity)));
   }
 
-  /** Advances by h seconds. Returns false if the step couldn't be solved. */
+  /**
+   * Advances by h seconds. Returns false if the step couldn't be solved.
+   *
+   * Inside, it may take several smaller steps: when a step won't settle (a
+   * transistor snapping on or off in the middle of it), it cuts the step to a
+   * quarter and tries again, then grows the step back (doubling) once things
+   * are calm. Small steps through a sudden change settle in a few iterations
+   * each; big steps elsewhere keep it fast. SPICE controls its steps the same way.
+   */
   step(h: number): boolean {
-    const sol = this.solveStep(h);
-    if (!sol.ok) {
-      this.sol = sol;
-      return false;
+    let left = h;
+    while (left > h * 1e-9) {
+      let hi = Math.min(left, this.hInner);
+      if (left - hi < 0.25 * hi) hi = left; // don't leave a sliver for later
+      let sol = this.solveStep(hi, false);
+      if (!sol.ok) {
+        // Cut down to 1/64 of the step; past that, the change is a transistor flipping state
+        // (instant in this model), so solve straight to its far side with every trick.
+        if (hi > h / 64) {
+          this.hInner = hi / 4;
+          continue;
+        }
+        sol = this.solveStep(hi, true);
+        if (!sol.ok) return false;
+      }
+      this.commit(sol, hi);
+      left -= hi;
+      // Calm (settled in a few iterations): try a bigger step next time.
+      this.hInner = sol.iterations <= 4 ? hi * 2 : hi;
     }
+    return true;
+  }
+
+  /** Preferred internal step, s: shrinks through sudden changes, grows back when calm. */
+  private hInner = Infinity;
+  /** Each junction's limiting memory at the last good step, restored before every attempt. */
+  private junctions: { s: number[]; saved: number[] }[] | null = null;
+  private saveJunctions(): void {
+    if (!this.junctions) {
+      this.junctions = [];
+      for (const pn of this.net.parts)
+        for (const d of pn.devices) if (d.type === 'pn' || d.type === 'npn') this.junctions.push({ s: d.s, saved: [...d.s] });
+    }
+    for (const j of this.junctions) for (let k = 0; k < j.s.length; k++) j.saved[k] = j.s[k];
+  }
+  private restoreJunctions(): void {
+    if (this.junctions) for (const j of this.junctions) for (let k = 0; k < j.s.length; k++) j.s[k] = j.saved[k];
+  }
+
+  private commit(sol: Solution, h: number): void {
     this.sol = sol;
     this.time += h;
+    this.lastH = h;
     for (const cap of this.caps) {
       const v = this.capVoltage(cap, sol.x);
       cap.history = { v, vPrev: cap.history.v, steps: Math.min(2, cap.history.steps + 1) };
     }
-    return true;
+    this.saveJunctions();
   }
 
   /**
    * Solves one step of length h. With h = Infinity, each capacitor is held at
    * its present voltage (a stiff source), giving a consistent starting point.
    */
-  private solveStep(h: number): Solution {
+  private solveStep(h: number, lastResort: boolean): Solution {
     for (const { device: d, history: s } of this.caps) {
       if (!Number.isFinite(h)) {
         // Hold the voltage: a very large conductance to a source at v.
         d.geq = 1e3;
         d.ieq = 1e3 * s.v;
-      } else if (s.steps >= 2) {
-        d.geq = (3 * d.c) / (2 * h);
-        d.ieq = (d.c * (4 * s.v - s.vPrev)) / (2 * h);
+      } else if (s.steps >= 2 && this.lastH > 0) {
+        // BDF2 for unequal steps (w = this step ÷ the last one); with equal steps it is
+        // i = C·(3vₙ − 4vₙ₋₁ + vₙ₋₂) / (2h).
+        const w = h / this.lastH;
+        d.geq = ((d.c / h) * (1 + 2 * w)) / (1 + w);
+        d.ieq = (d.c / h) * ((1 + w) * s.v - ((w * w) / (1 + w)) * s.vPrev);
       } else {
         d.geq = d.c / h;
         d.ieq = (d.c * s.v) / h;
@@ -140,7 +193,12 @@ export class TransientSim {
     if (!this.hasSource && this.caps.every((c) => c.history.v === 0)) {
       return { x: new Float64Array(this.net.size), ok: true, iterations: 0 };
     }
-    return solveFrom(this.net, this.sol?.x ?? null);
+    if (!Number.isFinite(h) || lastResort) return solveFrom(this.net, this.sol?.x ?? null);
+    // Each attempt starts from the junctions as they were at the last good step, never from a failed attempt.
+    this.restoreJunctions();
+    // Give up after 10 iterations: cutting the step is cheaper than grinding on. (Starting from a
+    // straight-line prediction instead of the last answer was tried: it made pitches less accurate.)
+    return solveFrom(this.net, this.sol.x, 10, false);
   }
 
   private capVoltage(cap: CapEntry, x: Float64Array): number {

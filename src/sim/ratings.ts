@@ -31,6 +31,8 @@ export const RATINGS: Partial<Record<PartKind, Limit[]>> = {
   diode: [{ quantity: 'current', max: 0.2, burn: 0.4 }],
   // Active buzzer: about 30 mA, 3–12 V.
   buzzer: [{ quantity: 'current', max: 0.03, burn: 0.06 }],
+  // 8 Ω, 0.5 W speaker: past about 1 W the voice coil overheats.
+  speaker: [{ quantity: 'power', max: 0.5, burn: 1 }],
   // 9 V, 50 mA lamp (0.45 W): a little overdrive is fine, twice the power melts the filament.
   lamp: [{ quantity: 'power', max: 0.5, burn: 0.9 }],
   // 2N3904: 200 mA collector current, 625 mW.

@@ -59,9 +59,32 @@ export const LED_RED: DiodeModel = { is: 2.2e-18, n: 2, rs: 5 };
  * Active buzzer, modeled as its polarity-sensitive driver: a silicon junction
  * plus about 560 Ω. Draws roughly 15 mA at 9 V and nothing when reversed.
  */
+/**
+ * Small 8 Ω, 0.5 W speaker. Electrically, its voice coil is mostly resistance
+ * (its inductance, which matters at high pitches, is left out). The sound it
+ * makes follows the current through the coil, which pushes the cone in and out.
+ */
+export const SPEAKER = { r: 8, fullScale: 0.15 };
+
 export const BUZZER: DiodeModel = { is: 2.52e-9, n: 1.752, rs: 560 };
 
 /** NPN transistor, Ebers–Moll model with 2N3904-like values and a typical gain (β) of 200. */
+/**
+ * Junction capacitances (from the datasheets), used only in time-based
+ * simulation. Every PN junction stores a little charge, so its voltage can't
+ * jump instantly: this is what limits how fast a transistor switches. Treated
+ * as fixed values (in real parts they vary somewhat with voltage).
+ */
+export const JUNCTION_C = {
+  /** 2N3904: base–emitter (Cje) and base–collector (Cjc). */
+  npnBe: 4.5e-12,
+  npnBc: 3.6e-12,
+  /** 1N4148. */
+  diode: 4e-12,
+  /** A 5 mm LED (a much bigger junction). */
+  led: 30e-12,
+};
+
 export interface BjtModel {
   is: number;
   /** Forward current gain (β, also called hFE). */

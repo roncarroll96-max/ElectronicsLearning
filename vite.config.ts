@@ -16,7 +16,7 @@ function offline(): Plugin {
       const files = Object.keys(bundle).filter(
         (f) => !f.endsWith('.map') && (!/\.(woff2?|ttf)$/.test(f) || /-latin-(wght|standard)-normal/.test(f)),
       );
-      const precache = ['./', 'index.html', 'favicon.svg', ...files.filter((f) => f !== 'index.html')];
+      const precache = ['./', 'index.html', 'favicon.svg', 'sim-audio-worklet.js', ...files.filter((f) => f !== 'index.html')];
       this.emitFile({ type: 'asset', fileName: 'sw.js', source: serviceWorkerSource(fingerprint(precache.join('\n')), precache) });
     },
   };

@@ -30,6 +30,7 @@ Then open http://localhost:5180.
 - Milestone 1 review: switches and push buttons work directly on the canvas, offline support after the first visit, and layout fixes. Spec checks 1, 2, 4 and 6 pass (3 and 5 belong to milestones 2 and 3). Done.
 - Milestone 2, step 1: circuits that change over time. Capacitors charge and discharge (with a charge gauge), LEDs fade, a two-transistor blinker blinks; a clock with pause, slow motion and power off/on; the Capacitors lesson now watches a capacitor charge. Done.
 - Milestone 2, step 2: oscilloscope. Two channels probed like the multimeter, sampled at every simulation step; volts/division, position, time/division, trigger, Auto, and readings of voltage, range and frequency; the panel can be dragged anywhere and docked back. Done.
+- Milestone 2, step 3: sound. A speaker part plays the simulated waveform; buzzers play their own tone; sound button and volume in the top bar (off on the first visit), with a limiter. The simulator now runs in a background thread. Done (fast transistor tone circuits are still too demanding to play live: a later speed-up task).
 
 ### Canvas controls
 
@@ -43,5 +44,6 @@ Then open http://localhost:5180.
 - **Switches and push buttons:** click a switch to flip it; press and hold a push button to press it
 - **Circuit time** (appears when a circuit has a capacitor): pause, slow motion, and the power button to empty every capacitor and start again
 - **Oscilloscope:** click the scope button in the toolbar, drag the CH1 (yellow) and CH2 (cyan) probes onto pins, then press Auto; drag the panel by its title to move it
+- **Sound:** the speaker button in the top bar turns sound on (it starts off) and shows a volume slider; buzzers beep, speakers play whatever the circuit does
 - **Multimeter:** click the meter button in the toolbar, then drag the red and black probes onto pins
 - **Pan:** drag empty space (two fingers on a tablet); **zoom:** mouse wheel or pinch; click the % to fit

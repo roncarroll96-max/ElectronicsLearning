@@ -66,6 +66,8 @@ interface Props {
   sim: SimResult;
   /** Heat-averaged readings, for "running hot" (defaults to sim). */
   stress?: SimResult;
+  /** How loudly each speaker is sounding (rms of its changing current, A). */
+  soundLevels?: ReadonlyMap<string, number>;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
   scope: ScopeState;
@@ -133,7 +135,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, meter, onMeter, scope, onScope, onPress, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, soundLevels, meter, onMeter, scope, onScope, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -180,10 +182,13 @@ export function CircuitCanvas(props: Props) {
     for (const p of circuit.parts) {
       const r = sim.parts.get(p.id);
       const s = stressOf(p, (stress ?? sim).parts.get(p.id));
-      out.set(p.id, liveOf(p, r, !!s && s.level !== 'ok'));
+      const fx = liveOf(p, r, !!s && s.level !== 'ok');
+      // A speaker sounds when its current is changing (a steady current just holds the cone still).
+      if (p.kind === 'speaker' && !p.burn) fx.sound = (soundLevels?.get(p.id) ?? 0) > 0.002;
+      out.set(p.id, fx);
     }
     return out;
-  }, [circuit.parts, sim, stress]);
+  }, [circuit.parts, sim, stress, soundLevels]);
 
   // Start with the world origin in the middle of the canvas.
   useLayoutEffect(() => {

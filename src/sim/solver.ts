@@ -70,11 +70,11 @@ function stamp(A: Float64Array, b: Float64Array, n: number, nodes: number[], e: 
   }
 }
 
-function newton(n: number, devices: Device[], x0: Float64Array, gmin: number, scale: number): Solution {
+function newton(n: number, devices: Device[], x0: Float64Array, gmin: number, scale: number, maxIter = MAX_ITER): Solution {
   const A = new Float64Array(n * n);
   const b = new Float64Array(n);
   let x = x0.slice();
-  for (let it = 1; it <= MAX_ITER; it++) {
+  for (let it = 1; it <= maxIter; it++) {
     A.fill(0);
     b.fill(0);
     for (let k = 0; k < n; k++) A[k * n + k] = gmin;
@@ -97,21 +97,25 @@ function newton(n: number, devices: Device[], x0: Float64Array, gmin: number, sc
     x = xn;
     if (converged) return { x, ok: true, iterations: it };
   }
-  return { x, ok: false, iterations: MAX_ITER };
+  return { x, ok: false, iterations: maxIter };
 }
 
 /**
- * One time step: Newton's method starting from the previous step's answer,
- * keeping each junction's history so it settles in a few iterations. Falls back
- * to the full DC strategy if that fails (after a sudden change, say).
+ * Newton's method starting from a nearby answer (the previous time step's),
+ * keeping each junction's history so it settles in a few iterations.
+ * With `fallback`, a failure falls back to the full DC strategy; without it,
+ * it just reports failure after `maxIter` iterations, so the time stepper can
+ * cut its step instead, which is much faster (SPICE does the same).
  */
-export function solveFrom(net: Netlist, x0: Float64Array | null): Solution {
+export function solveFrom(net: Netlist, x0: Float64Array | null, maxIter = MAX_ITER, fallback = true): Solution {
   const n = net.size;
   if (n === 0) return { x: new Float64Array(0), ok: true, iterations: 0 };
   const devices = net.parts.flatMap((p) => p.devices);
   if (x0 && x0.length === n) {
-    const r = newton(n, devices, x0, 0, 1);
-    if (r.ok) return r;
+    const r = newton(n, devices, x0, 0, 1, maxIter);
+    if (r.ok || !fallback) return r;
+  } else if (!fallback) {
+    return { x: new Float64Array(n), ok: false, iterations: 0 };
   }
   return solveDC(net);
 }
