@@ -4,194 +4,11 @@
  * step whose check is impossible (or too easy) before a real learner does.
  */
 import { describe, expect, it } from 'vitest';
-import { addPart, addWire, createPart, deleteItems, flipPart, newId, updatePart, type Circuit, type Part } from '../../model/circuit';
-import type { PartKind } from '../../model/parts';
-import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterMode, type MeterState } from '../../meter/meter';
-import type { PinRef } from '../../model/circuit';
-import { AUDIO_RATE, usesTime } from '../../sim/live';
-import { simulate, type SimResult } from '../../sim/simulate';
-import { Trace } from '../../scope/trace';
-import { INITIAL_SCOPE, scopeView } from '../../scope/scope';
-import { Recorder } from './recorder';
-import { SPEAKER } from '../../sim/models';
-import { TransientSim } from '../../sim/transient';
-import { BASE_STEP } from '../../state/useLiveSim';
-import { worstBurnout } from '../../sim/ratings';
-import { topology } from '../topology';
-import { lessonById, LESSONS } from './index';
-import { advance, isComplete } from './progress';
-import { allSteps, type CheckCtx, type Lesson } from './types';
-
-/** Plays a lesson: holds the circuit and meter, and ticks steps as the learner acts. */
-function play(id: string) {
-  const lesson = lessonById(id) as Lesson;
-  let c: Circuit = lesson.starter ? lesson.starter() : { parts: [], wires: [] };
-  let meter: MeterState = { ...INITIAL_METER };
-  let done: string[] = [];
-  // The oscilloscope (its probes and record), the readings' recent history, and the sound switch.
-  let scope = { open: false, pins: [null, null] as [PinRef | null, PinRef | null] };
-  const trace = new Trace();
-  const recorder = new Recorder();
-  let sound = false;
-  // Each speaker's loudness since the last tick: the changing part of its current, rms (as the live engine measures it).
-  let levels = new Map<string, number>();
-  const acc = new Map<string, { sum: number; sq: number; n: number }>();
-
-  // Like the app: a circuit with capacitors runs in time (the learner waits, the clock moves);
-  // without them it's solved once. The stepper is rebuilt on every change, keeping charge.
-  let engine: TransientSim | null = null;
-  let engineFor: [Circuit, MeterState] | null = null;
-  const live = (): SimResult => {
-    const sc = circuitWithMeter(c, meter);
-    if (!usesTime(sc)) {
-      engine = null;
-      return simulate(sc);
-    }
-    if (!engine || !engineFor || engineFor[0] !== c || engineFor[1] !== meter) {
-      engine = new TransientSim(sc, engine?.capStates(), engine?.time ?? 0);
-      engineFor = [c, meter];
-    }
-    return engine.result();
-  };
-
-  const ctx = (): CheckCtx => {
-    // The app burns out the most overloaded part, one at a time, until none is.
-    for (let n = 0; n < 5; n++) {
-      const worst = worstBurnout(c, live());
-      if (!worst || worst.id.startsWith('__')) break;
-      c = updatePart(c, worst.id, { burn: worst.burn });
-    }
-    const sim = live();
-    // The app blows the fuse when an ammeter carries too much.
-    const blown = fuseOverload(meter, sim);
-    if (blown !== null) meter = { ...meter, fuseBlownAt: blown };
-    const sim2 = blown !== null ? live() : sim;
-    const time = (engine as TransientSim | null)?.time ?? 0;
-    recorder.record(time, sim2);
-    return {
-      c,
-      sim: sim2,
-      t: topology(c),
-      meter,
-      reading: meter.open ? readMeter(c, meter, sim2) : null,
-      time,
-      scope: scopeView({ ...INITIAL_SCOPE, open: scope.open }, scope.open ? scope.pins : [null, null], trace, time),
-      recent: recorder,
-      sound,
-      levels,
-    };
-  };
-  const tick = () => {
-    done = advance(lesson, done, ctx());
-    return done;
-  };
-  const find = (kind: PartKind, n = 0): Part => c.parts.filter((p) => p.kind === kind)[n];
-  const api = {
-    lesson,
-    get c() {
-      return c;
-    },
-    set c(next: Circuit) {
-      c = next;
-    },
-    find,
-    ref(r: string): Part {
-      const p = c.parts.find((x) => x.ref === r);
-      expect(p, r).toBeDefined();
-      return p!;
-    },
-    remove(p: Part) {
-      c = deleteItems(c, new Set([p.id]));
-    },
-    add(kind: PartKind, value?: number) {
-      const p = createPart(kind, 0, 0);
-      c = addPart(c, value !== undefined ? { ...p, value } : p);
-      return c.parts[c.parts.length - 1];
-    },
-    wire(a: Part, pa: number, b: Part, pb: number) {
-      c = addWire(c, newId('w'), { part: a.id, pin: pa }, { part: b.id, pin: pb });
-    },
-    unwire(a: Part, pa: number, b: Part, pb: number) {
-      const w = c.wires.find(
-        (w) =>
-          (w.a.part === a.id && w.a.pin === pa && w.b.part === b.id && w.b.pin === pb) ||
-          (w.b.part === a.id && w.b.pin === pa && w.a.part === b.id && w.a.pin === pb),
-      );
-      expect(w, 'wire to delete').toBeDefined();
-      c = deleteItems(c, new Set([w!.id]));
-    },
-    set(p: Part, patch: Parameters<typeof updatePart>[2]) {
-      c = updatePart(c, p.id, patch);
-    },
-    meter(mode: MeterMode, red?: [Part, number], black?: [Part, number]) {
-      meter = {
-        ...meter,
-        open: true,
-        mode,
-        ...(red ? { red: { pin: { part: red[0].id, pin: red[1] } } } : {}),
-        ...(black ? { black: { pin: { part: black[0].id, pin: black[1] } } } : {}),
-      };
-    },
-    /**
-     * Lets circuit time pass (the app's clock running), ticking steps as it goes, like the app
-     * does every frame; the scope samples every step (as small as the app's, 1/16000 s with a speaker).
-     */
-    wait(seconds: number) {
-      live();
-      const h = c.parts.some((p) => p.kind === 'speaker' && !p.burn) ? 1 / AUDIO_RATE : BASE_STEP;
-      const steps = Math.round(seconds / h);
-      const perTick = Math.max(1, Math.round(0.02 / h));
-      for (let k = 0; k < steps && engine; k++) {
-        const e = engine as TransientSim;
-        e.step(h);
-        if (scope.open) {
-          const [a, b] = scope.pins;
-          trace.push(e.time, a ? (e.voltageAt(a) ?? NaN) : NaN, b ? (e.voltageAt(b) ?? NaN) : NaN);
-        }
-        for (const s of c.parts) {
-          if (s.kind !== 'speaker' || s.burn) continue;
-          const i = ((e.voltageAt({ part: s.id, pin: 0 }) ?? 0) - (e.voltageAt({ part: s.id, pin: 1 }) ?? 0)) / SPEAKER.r;
-          const x = acc.get(s.id) ?? { sum: 0, sq: 0, n: 0 };
-          acc.set(s.id, { sum: x.sum + i, sq: x.sq + i * i, n: x.n + 1 });
-        }
-        if (k % perTick === 0) {
-          levels = new Map([...acc].map(([id, x]) => [id, Math.sqrt(Math.max(0, x.sq / x.n - (x.sum / x.n) ** 2))]));
-          acc.clear();
-          tick();
-        }
-      }
-      return tick();
-    },
-    /** The power button: every capacitor empty, the clock back to zero. */
-    restart() {
-      engine = null;
-      engineFor = null;
-      trace.clear();
-    },
-    /** Opens the scope with its probes on these pins. */
-    probe(ch1?: [Part, number], ch2?: [Part, number]) {
-      const pin = (x?: [Part, number]): PinRef | null => (x ? { part: x[0].id, pin: x[1] } : null);
-      scope = { open: true, pins: [pin(ch1), pin(ch2)] };
-      trace.clear();
-    },
-    /** Switches sound on or off. */
-    sound(on: boolean) {
-      sound = on;
-    },
-    replaceFuse() {
-      meter = { ...meter, fuseBlownAt: null };
-    },
-    closeMeter() {
-      meter = { ...meter, open: false };
-    },
-    tick,
-    /** Asserts exactly these steps are done so far. */
-    expectDone(ids: string[]) {
-      expect(tick()).toEqual(ids);
-    },
-  };
-  return api;
-}
+import { flipPart } from '../../model/circuit';
+import { LESSONS } from './index';
+import { isComplete } from './progress';
+import { allSteps } from './types';
+import { play } from './harness';
 
 describe('lessons', () => {
   it('every lesson has a concept, steps with unique ids, and a summary', () => {
@@ -863,6 +680,146 @@ describe('lessons', () => {
     expect(isComplete(p.lesson, p.tick())).toBe(true);
   });
 
+  it('HIGH and LOW', () => {
+    const p = play('logic-levels');
+    const [gate, led, sw] = [p.find('not'), p.find('led'), p.find('switch')];
+    p.wire(led, 1, gate, 3);
+    p.expectDone(['gnd']);
+    p.set(sw, { on: true });
+    p.expectDone(['gnd', 'flip']);
+    p.meter('V', [gate, 0], [gate, 3]);
+    p.expectDone(['gnd', 'flip', 'measure-high']);
+    p.set(sw, { on: false });
+    p.expectDone(['gnd', 'flip', 'measure-high', 'measure-low']);
+    p.remove(sw);
+    p.remove(p.ref('R1'));
+    const pot = p.add('potentiometer', 10_000);
+    p.wire(pot, 0, gate, 2);
+    p.wire(pot, 1, gate, 3);
+    p.wire(pot, 2, gate, 0);
+    p.set(pot, { pos: 0.1 }); // 4.5 V: HIGH, LED off
+    p.wait(0.05);
+    p.expectDone(['gnd', 'flip', 'measure-high', 'measure-low', 'pot-high']);
+    p.set(pot, { pos: 0.5 }); // 2.5 V: inside the gap, still HIGH
+    p.wait(0.05);
+    p.expectDone(['gnd', 'flip', 'measure-high', 'measure-low', 'pot-high']);
+    p.set(pot, { pos: 0.9 }); // 0.5 V: LOW, LED on
+    p.wait(0.05);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('AND, OR, NOT', () => {
+    const p = play('gates');
+    const [s1, s2] = [p.find('switch'), p.find('switch', 1)];
+    p.set(s1, { on: true });
+    p.set(s2, { on: true });
+    p.expectDone(['and-both']);
+    p.set(s2, { on: false });
+    p.expectDone(['and-both', 'and-one']);
+    // Swap in the OR gate: delete the AND (its wires go with it) and wire U2 the same way.
+    const or = p.find('or');
+    const [r1, r2, r3, led] = [p.ref('R1'), p.ref('R2'), p.ref('R3'), p.find('led')];
+    p.remove(p.find('and'));
+    p.wire(or, 3, s1, 0);
+    p.wire(s1, 1, or, 0);
+    p.wire(or, 3, s2, 0);
+    p.wire(s2, 1, or, 1);
+    p.wire(or, 0, r1, 1);
+    p.wire(r1, 0, or, 4);
+    p.wire(or, 1, r2, 0);
+    p.wire(r2, 1, or, 4);
+    p.wire(or, 2, r3, 0);
+    p.wire(led, 1, or, 4);
+    p.expectDone(['and-both', 'and-one', 'or']);
+    p.set(s1, { on: false });
+    p.expectDone(['and-both', 'and-one', 'or', 'or-none']);
+    const n = p.add('not');
+    p.unwire(or, 2, r3, 0);
+    p.wire(n, 0, or, 2);
+    p.wire(n, 1, r3, 0);
+    p.wire(n, 3, or, 4);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('NAND builds everything', () => {
+    const p = play('nand');
+    const [s1, s2] = [p.find('switch'), p.find('switch', 1)];
+    const [u1, u2, r3] = [p.find('nand'), p.find('nand', 1), p.ref('R3')];
+    p.set(s1, { on: true });
+    p.set(s2, { on: true });
+    p.expectDone(['nand-both']);
+    p.set(s2, { on: false });
+    p.expectDone(['nand-both', 'nand-one']);
+    p.wire(u2, 0, u1, 2);
+    p.wire(u2, 1, u1, 2);
+    p.wire(u2, 4, u1, 4);
+    p.unwire(u1, 2, r3, 0);
+    p.wire(u2, 2, r3, 0);
+    p.expectDone(['nand-both', 'nand-one', 'make-not']);
+    p.set(s2, { on: true });
+    p.expectDone(['nand-both', 'nand-one', 'make-not', 'and']);
+    p.set(s2, { on: false });
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('A memory latch', () => {
+    const p = play('latch');
+    const [u1, u2] = [p.find('nand'), p.find('nand', 1)];
+    const [set, reset] = [p.find('pushbutton'), p.find('pushbutton', 1)];
+    p.wire(u2, 2, u1, 1);
+    p.expectDone(['feedback']);
+    p.set(reset, { on: true });
+    p.expectDone(['feedback', 'reset']);
+    p.set(reset, { on: false });
+    p.expectDone(['feedback', 'reset', 'hold-0']);
+    p.set(set, { on: true });
+    p.expectDone(['feedback', 'reset', 'hold-0', 'set']);
+    p.set(set, { on: false });
+    p.expectDone(['feedback', 'reset', 'hold-0', 'set', 'hold-1']);
+    p.set(set, { on: true });
+    p.set(reset, { on: true });
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('Flip-flops and counting', () => {
+    const p = play('counter');
+    const u2 = p.find('dff', 1);
+    const btn = p.find('pushbutton');
+    p.wire(u2, 3, u2, 0);
+    p.expectDone(['feedback']);
+    const press = () => {
+      p.set(btn, { on: true });
+      p.wait(0.02);
+      p.set(btn, { on: false });
+      p.wait(0.02);
+    };
+    press();
+    p.expectDone(['feedback', 'one']);
+    press();
+    p.expectDone(['feedback', 'one', 'two']);
+    press();
+    p.expectDone(['feedback', 'one', 'two', 'three']);
+    press();
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('The 7-segment display', () => {
+    const p = play('seven-seg');
+    const d = p.find('sevenseg');
+    const seg = (r: string, k: number) => p.wire(p.ref(r), 1, d, k);
+    seg('R1', 1);
+    seg('R2', 2);
+    p.expectDone(['one']);
+    seg('R3', 0);
+    p.expectDone(['one', 'seven']);
+    seg('R4', 3);
+    seg('R5', 6);
+    p.expectDone(['one', 'seven', 'three']);
+    seg('R6', 4);
+    seg('R7', 5);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
   it('each track has ten lessons, in a sensible order', () => {
     expect(LESSONS.filter((l) => l.track === 'foundations').map((l) => l.id)).toEqual([
       'first-led',
@@ -878,5 +835,6 @@ describe('lessons', () => {
     ]);
     expect(LESSONS.filter((l) => l.track === 'components')).toHaveLength(10);
     expect(LESSONS.filter((l) => l.track === 'timing')).toHaveLength(10);
+    expect(LESSONS.filter((l) => l.track === 'digital')).toHaveLength(10);
   });
 });

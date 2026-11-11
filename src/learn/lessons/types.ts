@@ -6,7 +6,7 @@ import type { SimResult } from '../../sim/simulate';
 import type { Topology } from '../topology';
 import type { Recent } from './recorder';
 
-export type TrackId = 'foundations' | 'components' | 'timing';
+export type TrackId = 'foundations' | 'components' | 'timing' | 'digital';
 
 /** Everything a step's check can look at. */
 export interface CheckCtx {
@@ -25,6 +25,16 @@ export interface CheckCtx {
   sound: boolean;
   /** How loudly each speaker is being driven: the changing part of its current, rms, A (by part id). */
   levels: ReadonlyMap<string, number>;
+  /** Each Arduino (by part id): whether its sketch compiled and runs, and what it has printed over Serial. */
+  arduinos?: ReadonlyMap<string, ArduinoCheck>;
+}
+
+export interface ArduinoCheck {
+  status: 'compiling' | 'error' | 'running';
+  /** Everything it has printed (the most recent part, if long). */
+  serial: string;
+  /** Running its program (not held in reset by a low supply). */
+  running: boolean;
 }
 
 export interface Step {

@@ -175,6 +175,7 @@ export function App() {
       recent: recorder,
       sound: sound.on,
       levels: live.levels,
+      arduinos: new Map([...live.arduinos.views].map(([id, v]) => [id, { status: v.status.phase, serial: v.serial, running: v.running }])),
     });
     if (after.length === before.length) return;
     setProgress((p) => ({ ...p, [lesson.id]: after }));
