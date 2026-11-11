@@ -16,7 +16,8 @@ Then open http://localhost:5180.
 - `npm run build`: production build into `dist/` (a static site that can be hosted anywhere; after the first visit it works offline)
 - `npm run preview`: serve the production build at http://localhost:4180 (offline support only runs in the built site)
 - `npm run typecheck`: check the TypeScript code for errors
-- `npm test`: run the tests (the simulator is checked against hand calculations)
+- `npm test`: run the tests (the simulator is checked against hand calculations; the Arduino compiler tests run last, on their own, because they would otherwise slow the simulator's speed checks)
+- `npm run prepare-arduino`: prepare the in-browser Arduino compiler in `public/arduino/` from the pinned `@horang-corp/avr-gcc-wasm` package (runs automatically before `dev`, `build` and `test`; the output isn't committed)
 
 ## Progress
 
@@ -34,6 +35,7 @@ Then open http://localhost:5180.
 - Milestone 2, step 4: new parts. An AC source (signal generator: up to 25 V peak, 1 Hz to 20 kHz, sine, square or triangle), an inductor, a transformer, a bridge rectifier and a 555 timer, each with readings, ratings and a "Why this value?" explanation. Done.
 - Milestone 2, step 5: the Sound & Timing track, 10 lessons: the oscilloscope, a two-transistor blinker, from blink to beep, the 555 one-shot, the 555 blinker, 555 tones (tune to A, 440 Hz), a light theremin, AC signals, rectifiers, and a DC power supply project. Lesson steps can now check what the scope measures, whether an LED is blinking, and whether a speaker is sounding. Each lesson is proven completable by an automated walk-through. Done.
 - Milestone 2 review: “Show the math” now works out a blinker capacitor’s half-cycle and a 555’s frequency or pulse length from the parts in your circuit, and tests check those predictions against the simulated scope (spec check 3). The blinker lesson’s quoted rate corrected to the simulated 1.7 Hz. Spec checks 1, 2, 3, 4 and 6 pass (5 belongs to milestone 3). Done.
+- Milestone 3, step 1: in-browser Arduino compiler. Real avr-gcc 7.3.0 (the Arduino IDE’s Uno compiler), binutils, avr-libc 2.0.0 and the Arduino AVR core, built for WebAssembly, run in a background thread: a 6.6 MB one-time download, kept on the device so it works offline, and nothing is sent anywhere. Sketches are prepared like the IDE does (Arduino.h, automatic prototypes), the core is linked as an archive so only what a sketch uses goes in, and errors point at the sketch line with a plain-English hint. Blink compiles in about 0.2 s. The About panel (ⓘ in the top bar) downloads, tests or removes the compiler and lists the open-source licences. Tests compile real sketches and run them on the avr8js emulator. Done.
 
 ### Canvas controls
 
@@ -50,4 +52,5 @@ Then open http://localhost:5180.
 - **Oscilloscope:** click the scope button in the toolbar, drag the CH1 (yellow) and CH2 (cyan) probes onto pins, then press Auto; drag the panel by its title to move it
 - **Sound:** the speaker button in the top bar turns sound on (it starts off) and shows a volume slider; buzzers beep, speakers play whatever the circuit does
 - **Multimeter:** click the meter button in the toolbar, then drag the red and black probes onto pins
+- **About** (ⓘ, top bar): download the Arduino compiler now, test it by compiling Blink, remove it, and see the open-source licences
 - **Pan:** drag empty space (two fingers on a tablet); **zoom:** mouse wheel or pinch; click the % to fit

@@ -115,7 +115,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 - Runs entirely in a modern browser (Chrome, Edge, Firefox, Safari).
 - Hosted as a **free public website** (for example GitHub Pages) and works offline after the first visit.
 - No server, no hosting costs.
-- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth (it runs on the page for now: the time-based simulator computes 3 s of a two-transistor blinker in about 0.7 s and limits itself to half of each animation frame; it moves to a background thread with real sound in milestone 2, step 3, which needs tens of thousands of steps a second); Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at milestone 3).
+- **Technology (assumed, Claude's default):** TypeScript with a modern build tool; the simulator runs in a background thread so the page stays smooth (it runs on the page for now: the time-based simulator computes 3 s of a two-transistor blinker in about 0.7 s and limits itself to half of each animation frame; it moves to a background thread with real sound in milestone 2, step 3, which needs tens of thousands of steps a second); Web Audio for sound; avr8js (open source) to emulate the Arduino chip; a WebAssembly build of the compiler for Arduino code (proven at the start of milestone 3: avr-gcc 7.3.0 in its own background thread, downloaded once and kept on the device).
 
 ## Decisions
 | Topic | Decision | Decided by |
@@ -148,7 +148,8 @@ Built in three milestones. Each milestone is a usable app on its own.
 
 ## Open questions
 - **Final name:** "Electronics Tutorial" is a working name. "Circuit Lab" was dropped because circuitlab.com is an established circuit simulator; "SparkBench" was considered (only clash: an IBM Apache Spark benchmark, unrelated). Pick and check the final name before publishing. Internal identifiers (storage keys, the file format tag "circuit-lab") stay as they are so saved work and exported files keep working. (You)
-- **In-browser compiler:** confirm it's practical (download size, speed) at the start of milestone 3. If not, revisit with you. (Claude)
+- **In-browser compiler:** *Settled 2026-11-11: practical.* Real avr-gcc 7.3.0 and binutils 2.42 built for WebAssembly (from the npm package @horang-corp/avr-gcc-wasm), with avr-libc 2.0.0 and the Arduino AVR core: 6.6 MB to download once (24.5 MB unpacked), Blink compiles in about 0.2 s in Chrome, works offline. (Claude)
+- **Compiler source before publishing:** the compiler and tools are GPL v3, so the public site must point to their corresponding source, including the WebAssembly build's patches and scripts. The About panel links to GCC, binutils and the avr-gcc-wasm repository; confirm that repository holds the build scripts (or host them) before the site goes public. (Claude)
 - **Hosting account:** publishing to GitHub Pages needs a GitHub repository. Decide when milestone 1 is ready to share. (You)
 
 ## How we'll know it works

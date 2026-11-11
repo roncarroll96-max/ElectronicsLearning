@@ -40,6 +40,7 @@ import {
 } from './state/storage';
 import { circuitToFile, fileNameFor, parseCircuitFile } from './model/circuitFile';
 import { CircuitsMenu, type CircuitsMenuApi } from './components/CircuitsMenu';
+import { AboutPanel } from './components/AboutPanel';
 
 /** Everything remembered from the last visit, read once at start-up. */
 function restore() {
@@ -229,6 +230,7 @@ export function App() {
   /* ---------- Named saves, export and import ---------- */
   const [saved, setSaved] = useState<SavedCircuit[]>(boot.saved);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const inSandbox = activeWorkspace === 'sandbox';
   const sandboxSave = inSandbox && sandboxSaveId ? saved.find((s) => s.id === sandboxSaveId) : undefined;
   const circuitName = lessonActive && lesson ? lesson.title : (sandboxSave?.name ?? 'My circuit');
@@ -471,10 +473,19 @@ export function App() {
         onToggleTheme={toggle}
         onTogglePanels={() => setPanelsOpen((o) => !o)}
         menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((o) => !o)}
+        onToggleMenu={() => {
+          setAboutOpen(false);
+          setMenuOpen((o) => !o);
+        }}
+        aboutOpen={aboutOpen}
+        onToggleAbout={() => {
+          setMenuOpen(false);
+          setAboutOpen((o) => !o);
+        }}
         sound={sound}
       />
       {menuOpen && <CircuitsMenu api={menu} onClose={() => setMenuOpen(false)} />}
+      {aboutOpen && <AboutPanel onClose={() => setAboutOpen(false)} />}
       <div className="workspace">
         <PartsTray onTileDown={onTileDown} onTileActivate={onTileActivate} highlight={trayHint} />
         <CircuitCanvas

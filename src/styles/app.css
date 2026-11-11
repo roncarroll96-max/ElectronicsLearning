@@ -2326,6 +2326,37 @@ kbd {
   border-color: var(--border-strong);
 }
 
+.about-progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.about-credits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.about-credits a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.about-credits a:hover {
+  text-decoration: underline;
+}
+
+.about-licence {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
 .cm-hint {
   margin: 0;
   font-size: 12px;

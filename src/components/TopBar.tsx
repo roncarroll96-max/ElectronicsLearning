@@ -14,10 +14,12 @@ interface Props {
   onTogglePanels: () => void;
   menuOpen: boolean;
   onToggleMenu: () => void;
+  aboutOpen: boolean;
+  onToggleAbout: () => void;
   sound: Sound;
 }
 
-export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu, sound }: Props) {
+export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu, aboutOpen, onToggleAbout, sound }: Props) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -117,6 +119,20 @@ export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTog
               <path d="M16 12.5A6.5 6.5 0 0 1 7.5 4a6.5 6.5 0 1 0 8.5 8.5z" />
             </svg>
           )}
+        </button>
+        <button
+          className={`icon-btn about-btn${aboutOpen ? ' on' : ''}`}
+          onClick={onToggleAbout}
+          aria-expanded={aboutOpen}
+          aria-haspopup="dialog"
+          aria-label="About, Arduino compiler and licences"
+          title="About"
+        >
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+            <circle cx="10" cy="10" r="7.5" />
+            <path d="M10 9v5" />
+            <circle cx="10" cy="6.2" r="0.6" fill="currentColor" stroke="none" />
+          </svg>
         </button>
       </div>
     </header>
