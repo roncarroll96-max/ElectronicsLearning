@@ -87,7 +87,7 @@ export interface MeterReading {
   tone: 'idle' | 'ok' | 'warn';
 }
 
-/** Whether the pins the probes touch are connected (through wires and parts) to a battery. */
+/** Whether the pins the probes touch are connected (through wires and parts) to a battery or AC source. */
 function touchesBattery(c: Circuit, pins: PinRef[]): boolean {
   const uf = new UnionFind<string>();
   for (const p of c.parts) {
@@ -104,7 +104,7 @@ function touchesBattery(c: Circuit, pins: PinRef[]): boolean {
 
   const roots = new Set(pins.map((p) => uf.find(pinKey(p))));
   return c.parts.some(
-    (p) => p.kind === 'battery' && !p.burn && [0, 1].some((i) => roots.has(uf.find(pinKey({ part: p.id, pin: i })))),
+    (p) => (p.kind === 'battery' || p.kind === 'acsource') && !p.burn && [0, 1].some((i) => roots.has(uf.find(pinKey({ part: p.id, pin: i })))),
   );
 }
 

@@ -18,6 +18,7 @@ const GROUPS: PartGroup[] = [
     title: 'Power',
     parts: [
       { kind: 'battery', name: 'Battery', hint: '9 V' },
+      { kind: 'acsource', name: 'AC source', hint: 'Signal generator' },
       { kind: 'ground', name: 'Ground', hint: '0 V reference' },
     ],
   },
@@ -28,6 +29,8 @@ const GROUPS: PartGroup[] = [
       { kind: 'potentiometer', name: 'Potentiometer', hint: 'Adjustable' },
       { kind: 'capacitor', name: 'Capacitor', hint: 'Stores charge' },
       { kind: 'ldr', name: 'Light sensor', hint: 'Photoresistor' },
+      { kind: 'inductor', name: 'Inductor', hint: 'Coil' },
+      { kind: 'transformer', name: 'Transformer', hint: 'Steps AC up or down' },
     ],
   },
   {
@@ -51,7 +54,12 @@ const GROUPS: PartGroup[] = [
     parts: [
       { kind: 'diode', name: 'Diode', hint: 'One-way valve' },
       { kind: 'npn', name: 'NPN transistor', hint: 'Switch, amplifier' },
+      { kind: 'bridge', name: 'Bridge rectifier', hint: 'AC to DC' },
     ],
+  },
+  {
+    title: 'Chips',
+    parts: [{ kind: 'timer555', name: '555 timer', hint: 'Pulses, tones' }],
   },
 ];
 

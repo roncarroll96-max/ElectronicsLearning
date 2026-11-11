@@ -5,9 +5,9 @@
  * formulas go in `math`, shown behind a "Show the math" button.
  */
 import type { Circuit, Part } from '../model/circuit';
-import { formatReading, formatValue } from '../model/parts';
+import { AC_DEFAULT_F, formatFreq, formatReading, formatValue } from '../model/parts';
 import { E6, standardDown, standardUp } from '../model/values';
-import { ldrResistance } from '../sim/models';
+import { inductorResistance, ldrResistance } from '../sim/models';
 import type { PartReading, SimResult } from '../sim/simulate';
 import { neighborOfKind, others, seriesPartner, topology, type PinAt, type Topology } from './topology';
 
@@ -112,6 +112,23 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         yours: `At ${Math.round((part.light ?? 0.5) * 100)}% light it measures ${R(ldrResistance(part.light ?? 0.5))}.`,
         math: [],
       };
+    case 'acsource':
+      return acsource(part, ctx);
+    case 'inductor':
+      return inductor(part, ctx);
+    case 'transformer':
+      return transformer(part, ctx);
+    case 'bridge':
+      return {
+        role: 'Rectifier',
+        goal: 'Turn AC, which flows both ways, into DC that flows one way only.',
+        reasoning:
+          'Inside are four diodes in a diamond. Whichever way the AC pushes, two of them conduct and steer the current out of the + pin and back in at the − pin, so both halves of the wave come out pointing the same way (“full-wave” rectification). A single diode would pass only one half and waste the other (“half-wave”). The output still rises and falls 100 times a second for 50 Hz AC; a big capacitor across + and − fills in the dips.',
+        yours: ctx.r ? `Its DC output is ${V(ctx.r.v[2] - ctx.r.v[3])} right now.` : undefined,
+        math: ['Peak DC out ≈ AC peak − 2 × 0.7 V (two diodes conduct at a time)', 'Ripple ≈ I_load ÷ (2 × f × C) for full-wave'],
+      };
+    case 'timer555':
+      return timer555(ctx);
     case 'ground':
       return {
         role: '0 V reference',
@@ -121,6 +138,74 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         math: [],
       };
   }
+}
+
+/* ---------- AC, coils and the 555 ---------- */
+
+function acsource(part: Part, ctx: Ctx): Why {
+  const vp = part.value ?? 5;
+  const f = part.freq ?? AC_DEFAULT_F;
+  const wave = part.wave ?? 'sine';
+  return {
+    role: 'Signal source',
+    goal: 'Make a voltage that keeps changing direction: alternating current (AC).',
+    reasoning:
+      'A battery always pushes the same way (DC). This source pushes one way, then the other, over and over: mains power does this 50 or 60 times a second, and audio signals hundreds or thousands of times a second. The peak voltage is how far it swings each way; the frequency is how many complete swings it makes each second. Watch it on the oscilloscope to see the wave shape.',
+    choice: 'Pick the frequency for what you’re testing: low (1–10 Hz) to watch things slowly, 50 Hz like mains, or hundreds of hertz and up for sounds.',
+    yours: `It swings between +${V(vp)} and −${V(vp)}, ${formatFreq(f)} (${n3(f)} complete ${wave} waves every second, each lasting ${time(1 / f)}).${ctx.r ? ` Right now ${A(ctx.r.i[0])} flows through it.` : ''}`,
+    math: [
+      `Period T = 1 ÷ f = 1 ÷ ${n3(f)} Hz = ${time(1 / f)}`,
+      ...(wave === 'sine' ? [`rms voltage = peak ÷ √2 = ${V(vp / Math.SQRT2)} (the steady DC voltage that would heat a resistor as much)`] : []),
+    ],
+  };
+}
+
+function inductor(part: Part, ctx: Ctx): Why {
+  const l = part.value ?? 0.01;
+  const r = inductorResistance(l);
+  const i = ctx.r?.i[0] ?? 0;
+  return {
+    role: 'Coil (inductor)',
+    goal: 'Resist changes in current: it stores energy in a magnetic field.',
+    reasoning:
+      'An inductor is a coil of wire. Current through it builds a magnetic field, and building or collapsing that field takes time, so the current through a coil can’t change suddenly: switched on, it rises gradually; switched off, the coil fights to keep it flowing, sometimes with a big voltage spike. It is the mirror image of a capacitor, whose voltage can’t jump. Once the current is steady, a coil is just a piece of wire (here about ' +
+      R(r) +
+      ' of winding resistance).',
+    choice: 'With a resistor R, current builds up with time constant τ = L ÷ R: after about 5τ it has finished changing.',
+    yours: ctx.r ? `${A(i)} flows through it, storing ${formatReading(0.5 * l * i * i, 'W').replace('W', 'J')}.` : undefined,
+    math: [`Winding resistance ≈ ${R(r)}`, 'Energy stored = ½ × L × I²', 'Opposition to AC (reactance) X = 2π × f × L: more at higher frequencies'],
+  };
+}
+
+function transformer(part: Part, ctx: Ctx): Why {
+  const n = part.value ?? 0.5;
+  const r = ctx.r;
+  return {
+    role: n < 1 ? 'Step-down transformer' : n > 1 ? 'Step-up transformer' : 'Isolating transformer',
+    goal: 'Change an AC voltage up or down, with no wire between the two sides.',
+    reasoning:
+      'Two coils share an iron core. Changing current in the first (primary) coil makes a changing magnetic field, and that field makes a voltage in the second (secondary). The voltage changes by the ratio of their turns of wire. It only works while the current keeps changing, so it passes AC but not steady DC. Power can’t be created: stepping the voltage down steps the available current up by the same ratio.',
+    choice: 'Turns ratio = secondary turns ÷ primary turns. A mains adapter uses about 0.05 to bring 230 V down to about 12 V.',
+    yours: r
+      ? `Its secondary has ${V(r.v[2] - r.v[3])} across it right now; the primary has ${V(r.v[0] - r.v[1])}.`
+      : `Turns ratio ${n3(n)}: the secondary voltage is ${n3(n)} times the primary’s.`,
+    math: [`V_secondary = V_primary × ${n3(n)}`, `I_secondary ≈ I_primary ÷ ${n3(n)} (the power is the same on both sides, less a little loss)`],
+  };
+}
+
+function timer555(ctx: Ctx): Why {
+  const r = ctx.r;
+  const vcc = r ? r.v[7] - r.v[0] : ctx.supply;
+  const high = r ? r.v[2] - r.v[0] > vcc / 2 : false;
+  return {
+    role: '555 timer',
+    goal: 'Make timed pulses: a steady on–off rhythm (astable), or one pulse of set length when triggered (monostable).',
+    reasoning:
+      'Inside are a voltage divider, two comparators and a memory (a flip-flop). When the Trigger pin drops below ⅓ of the supply, the output switches high; when the Threshold pin rises above ⅔, the output switches low and the Discharge pin connects to ground. A capacitor charging and discharging between ⅓ and ⅔ of the supply therefore sets the timing, and resistors set how fast it charges. Reset held low stops everything.',
+    choice: 'Astable: R1 from VCC to Discharge, R2 from Discharge to Threshold (tied to Trigger), C to ground. It runs at about 1.44 ÷ ((R1 + 2 R2) × C).',
+    yours: r ? `Its output is ${high ? 'high' : 'low'} (${V(r.v[2] - r.v[0])}), running from ${V(vcc)}.` : undefined,
+    math: ['Astable frequency f = 1.44 ÷ ((R1 + 2·R2) × C)', 'High time = 0.693 × (R1 + R2) × C, low time = 0.693 × R2 × C', 'Monostable pulse = 1.1 × R × C'],
+  };
 }
 
 /* ---------- Resistors ---------- */

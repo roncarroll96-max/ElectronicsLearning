@@ -7,7 +7,7 @@
  * - A separate piece of circuit with no ground symbol uses its battery's −
  *   terminal as 0 V (or any node, if it has no battery).
  */
-import { PART_DEFS } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS } from '../model/parts';
 import { pinKey, type Circuit, type Part } from '../model/circuit';
 import * as M from './models';
 import { criticalVoltage, type Device } from './devices';
@@ -37,7 +37,7 @@ export interface Netlist {
   parts: PartNet[];
   /** The net (a root pin key) each pin belongs to. */
   netOf: Map<string, string>;
-  /** Whether anything can drive current (a battery). */
+  /** Whether anything can drive current (a battery or an AC source). */
   hasSource: boolean;
 }
 
@@ -162,6 +162,76 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         // Time-based: a companion model the time stepper updates every step.
         if (opts.capacitors === 'companion') devices.push({ type: 'cap', lt: [0, 1], t: [], c: part.value ?? 0, geq: 0, ieq: 0 });
         break;
+      case 'acsource':
+        hasSource = true;
+        batteryMinus.push(local[1]);
+        devices.push({
+          type: 'ac',
+          lt: [0, 1],
+          t: [],
+          amp: Math.min(AC_MAX_V, part.value ?? 5),
+          freq: part.freq ?? AC_DEFAULT_F,
+          wave: part.wave ?? 'sine',
+          g: 1 / (opts.batteryResistance ?? M.AC_SOURCE_R),
+          // Settled (DC) view: the source at t = 0, which is 0 V; the time stepper sets ieq every step.
+          geq: 1 / (opts.batteryResistance ?? M.AC_SOURCE_R),
+          ieq: 0,
+        });
+        break;
+      case 'inductor': {
+        const l = part.value ?? 0;
+        // Settled (DC): a coil is just its wire, so only its winding resistance is left.
+        if (opts.capacitors !== 'companion') {
+          resistor(0, 1, M.inductorResistance(l));
+          break;
+        }
+        const j = addInternal();
+        resistor(0, j, M.inductorResistance(l));
+        devices.push({ type: 'ind', lt: [j, 1], t: [], l, geq: 0, ieq: 0 });
+        break;
+      }
+      case 'transformer': {
+        const n = part.value ?? 0.5;
+        const { l1, k, r1 } = M.TRANSFORMER;
+        const r2 = r1 * n * n;
+        if (opts.capacitors !== 'companion') {
+          resistor(0, 1, r1);
+          resistor(2, 3, r2);
+          break;
+        }
+        const a = addInternal();
+        const b = addInternal();
+        resistor(0, a, r1);
+        resistor(2, b, r2);
+        const l2 = l1 * n * n;
+        devices.push({ type: 'xfmr', lt: [a, 1, b, 3], t: [], l1, l2, m: k * Math.sqrt(l1 * l2), g: [0, 0, 0, 0], ie: [0, 0] });
+        break;
+      }
+      case 'bridge': {
+        const cj = M.RECTIFIER_CJ;
+        diode(0, 2, M.DIODE_1N4001, cj);
+        diode(1, 2, M.DIODE_1N4001, cj);
+        diode(3, 0, M.DIODE_1N4001, cj);
+        diode(3, 1, M.DIODE_1N4001, cj);
+        break;
+      }
+      case 'timer555': {
+        const T = M.TIMER555;
+        const { gnd, trig, out, reset, ctrl, thr, dis, vcc } = P555;
+        const mid = addInternal();
+        resistor(vcc, ctrl, T.divider);
+        resistor(ctrl, mid, T.divider);
+        resistor(mid, gnd, T.divider);
+        resistor(vcc, gnd, T.supplyR);
+        resistor(reset, vcc, T.resetPullUp);
+        resistor(trig, gnd, 1 / T.off);
+        resistor(thr, gnd, 1 / T.off);
+        // Starts reset (output low, discharge on); the time stepper sets the real state.
+        devices.push({ type: 'gi', role: 'high', lt: [vcc, out], t: [], geq: T.off, ieq: 0 });
+        devices.push({ type: 'gi', role: 'low', lt: [out, gnd], t: [], geq: 1 / T.outR, ieq: 0 });
+        devices.push({ type: 'gi', role: 'discharge', lt: [dis, gnd], t: [], geq: 1 / T.dischargeR, ieq: 0 });
+        break;
+      }
       case 'ground':
         break;
     }
@@ -171,7 +241,16 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
   /* 4. Pick a 0 V reference for every separate piece of circuit. */
   const pieces = new UnionFind<number>();
   for (let k = 0; k < next; k++) pieces.add(k);
-  for (const b of built) for (const d of b.devices) for (const l of d.lt.slice(1)) pieces.union(b.local[d.lt[0]], b.local[l]);
+  for (const b of built)
+    for (const d of b.devices) {
+      // A transformer's windings share no wire: each is its own piece (the secondary floats, as it really does).
+      if (d.type === 'xfmr') {
+        pieces.union(b.local[d.lt[0]], b.local[d.lt[1]]);
+        pieces.union(b.local[d.lt[2]], b.local[d.lt[3]]);
+        continue;
+      }
+      for (const l of d.lt.slice(1)) pieces.union(b.local[d.lt[0]], b.local[l]);
+    }
 
   const refOfPiece = new Map<number, number>();
   if (GROUND >= 0) refOfPiece.set(pieces.find(GROUND), GROUND);

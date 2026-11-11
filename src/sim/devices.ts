@@ -8,6 +8,7 @@
  *       (the Jacobian, row-major), used by Newton's method
  *   v0 — the voltages it was actually evaluated at (after limiting)
  */
+import type { Wave } from '../model/parts';
 import { GMIN, LAMP, VT, type BjtModel } from './models';
 
 interface Base {
@@ -27,6 +28,20 @@ export type Device =
    * Current into + is geq·(v+ − v−) − ieq.
    */
   | (Base & { type: 'cap'; c: number; geq: number; ieq: number })
+  /**
+   * An inductor during time-based simulation, also as a companion model: over a
+   * step, v = L·di/dt becomes i = geq·v − ieq with geq = 1/(L·a0) (see transient.ts).
+   */
+  | (Base & { type: 'ind'; l: number; geq: number; ieq: number })
+  /** An AC source: its internal conductance g, with the time stepper setting ieq = g·V(t) each step. */
+  | (Base & { type: 'ac'; amp: number; freq: number; wave: Wave; g: number; geq: number; ieq: number })
+  /** A switched element (the 555's output and discharge): conductance plus current, set when the chip flips. */
+  | (Base & { type: 'gi'; geq: number; ieq: number; role: 'high' | 'low' | 'discharge' })
+  /**
+   * Two coupled windings (a transformer). Terminals: primary a, b, secondary a, b.
+   * Winding currents (into each a) are i = G·v − ie, with v the two winding voltages.
+   */
+  | (Base & { type: 'xfmr'; l1: number; l2: number; m: number; g: number[]; ie: number[] })
   | (Base & { type: 'pn'; is: number; nvt: number; vcrit: number; s: number[] })
   | (Base & { type: 'lamp' })
   /**
@@ -35,6 +50,23 @@ export type Device =
    * stepper every step like a capacitor's companion model; qa = 0 means none (settled).
    */
   | (Base & { type: 'npn'; m: BjtModel; vcrit: number; s: number[]; qa: number; qhf: number; qhr: number });
+
+/** Devices that are a conductance plus a current source, restamped by the solver on every solve. */
+export type Companion = Extract<Device, { type: 'cap' | 'ind' | 'ac' | 'gi' }>;
+export const isCompanion = (d: Device): d is Companion => d.type === 'cap' || d.type === 'ind' || d.type === 'ac' || d.type === 'gi';
+
+/** An AC source's waveform at time t, from −1 to +1 (each starts at 0 V or its rising edge). */
+export function waveAt(wave: Wave, freq: number, t: number): number {
+  const ph = t * freq - Math.floor(t * freq);
+  switch (wave) {
+    case 'sine':
+      return Math.sin(2 * Math.PI * ph);
+    case 'square':
+      return ph < 0.5 ? 1 : -1;
+    case 'triangle':
+      return ph < 0.25 ? 4 * ph : ph < 0.75 ? 2 - 4 * ph : 4 * ph - 4;
+  }
+}
 
 export interface Evaluation {
   i: number[];
@@ -143,8 +175,36 @@ export function evaluateInto(d: Device, v: ArrayLike<number>, scale: number, lim
       return false;
 
     case 'cap':
+    case 'ind':
+    case 'ac':
+    case 'gi':
       twoTerminal(out, d.geq * (v[0] - v[1]) - d.ieq, d.geq, v[0], v[1]);
       return false;
+
+    case 'xfmr': {
+      const [g11, g12, g21, g22] = d.g;
+      const v1 = v[0] - v[1];
+      const v2 = v[2] - v[3];
+      const i1 = g11 * v1 + g12 * v2 - d.ie[0];
+      const i2 = g21 * v1 + g22 * v2 - d.ie[1];
+      const { i, J, v0 } = out;
+      i[0] = i1;
+      i[1] = -i1;
+      i[2] = i2;
+      i[3] = -i2;
+      const row = (r: number, a: number, b: number, sign: number) => {
+        J[r * 4] = sign * a;
+        J[r * 4 + 1] = -sign * a;
+        J[r * 4 + 2] = sign * b;
+        J[r * 4 + 3] = -sign * b;
+      };
+      row(0, g11, g12, 1);
+      row(1, g11, g12, -1);
+      row(2, g21, g22, 1);
+      row(3, g21, g22, -1);
+      for (let k = 0; k < 4; k++) v0[k] = v[k];
+      return false;
+    }
 
     case 'lamp': {
       const [i, g] = lamp(v[0] - v[1]);

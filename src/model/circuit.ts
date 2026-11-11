@@ -3,7 +3,7 @@
  * Every function here is pure (returns a new circuit, never mutates), which is
  * what makes undo/redo simple.
  */
-import { PART_DEFS, rotateDir, rotatePoint, type Dir, type PartKind, type Rotation } from './parts';
+import { PART_DEFS, rotateDir, rotatePoint, type Dir, type PartKind, type Rotation, type Wave } from './parts';
 
 export interface Pt {
   x: number;
@@ -25,6 +25,9 @@ export interface Part {
   pos?: number;
   /** Light falling on a light sensor, 0 (dark) to 1 (bright). Default 0.5. */
   light?: number;
+  /** AC source: frequency, Hz (default 50), and wave shape (default sine). */
+  freq?: number;
+  wave?: Wave;
   /** Set when the part was overloaded and burned out. A burned part conducts nothing. */
   burn?: BurnInfo;
 }
@@ -41,7 +44,7 @@ export interface BurnInfo {
   i: number[];
 }
 
-export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'burn'>>;
+export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'freq' | 'wave' | 'burn'>>;
 
 export interface PinRef {
   part: string;

@@ -7,7 +7,7 @@
  * device around the guess, solve the linear equations, repeat until the
  * answer stops changing.
  */
-import { evalBuffer, evaluateInto, resetDevice, type Device, type EvalBuffer } from './devices';
+import { evalBuffer, evaluateInto, isCompanion, resetDevice, type Companion, type Device, type EvalBuffer } from './devices';
 import { solveDense } from './linalg';
 import type { Netlist } from './netlist';
 
@@ -87,7 +87,8 @@ interface Workspace {
   nonlinear: boolean[];
   /** The non-linear devices, and the capacitors (companion models, which change every time step). */
   nl: number[];
-  caps: Extract<Device, { type: 'cap' }>[];
+  /** Capacitors, inductors, AC sources and switched elements: a conductance plus a current, set before each solve. */
+  caps: Companion[];
   /** Resistors' and sources' share of A, and the sources' share of b at full voltage: these never change. */
   Afixed: Float64Array;
   bSource: Float64Array;
@@ -106,12 +107,12 @@ function workspace(net: Netlist): Workspace {
     const n = net.size;
     const devices = net.parts.flatMap((p) => p.devices);
     // Everything but resistors, sources and capacitors is evaluated afresh on every pass (any new kind of device too).
-    const nonlinear = devices.map((d) => d.type !== 'g' && d.type !== 'source' && d.type !== 'cap');
+    const nonlinear = devices.map((d) => d.type !== 'g' && d.type !== 'source' && !isCompanion(d));
     w = {
       devices,
       nonlinear,
       nl: devices.flatMap((_, k) => (nonlinear[k] ? [k] : [])),
-      caps: devices.flatMap((d) => (d.type === 'cap' ? [d] : [])),
+      caps: devices.filter(isCompanion),
       Afixed: new Float64Array(n * n),
       bSource: new Float64Array(n),
       A0: new Float64Array(n * n),

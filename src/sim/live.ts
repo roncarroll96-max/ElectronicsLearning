@@ -32,8 +32,10 @@ const THERMAL_TAU = 0.05;
 /** A frame in which no capacitor changes by more than this (V) per step means the circuit has settled. */
 const SETTLED_DV = 1e-6;
 
-/** Circuits that change over time: they have a working capacitor. */
-export const usesTime = (c: Circuit) => c.parts.some((p) => p.kind === 'capacitor' && !p.burn);
+/** Kinds of part that make a circuit change over time. */
+const TIMED = new Set(['capacitor', 'inductor', 'transformer', 'acsource', 'timer555']);
+/** Circuits that change over time: they have a working capacitor, coil, AC source or 555. */
+export const usesTime = (c: Circuit) => c.parts.some((p) => TIMED.has(p.kind) && !p.burn);
 const speakersOf = (c: Circuit) => c.parts.filter((p) => p.kind === 'speaker' && !p.burn);
 
 /** Everything the page needs after a run. */

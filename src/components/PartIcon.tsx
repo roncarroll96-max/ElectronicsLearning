@@ -111,6 +111,43 @@ function paths(kind: PartKind) {
           <path d="M28 7a7 7 0 0 1 0 10" />
         </>
       );
+    case 'acsource':
+      return (
+        <>
+          <path d="M2 12h10M28 12h10" />
+          <circle cx="20" cy="12" r="8" />
+          <path d="M15 12c1.2-4 2.5-4 5 0s3.8 4 5 0" />
+        </>
+      );
+    case 'inductor':
+      return <path d="M2 14h6a3 3 0 0 1 6 0a3 3 0 0 1 6 0a3 3 0 0 1 6 0a3 3 0 0 1 6 0h6" />;
+    case 'transformer':
+      return (
+        <>
+          <path d="M2 4h11M2 20h11M38 4H27M38 20H27" />
+          <path d="M13 4a2 2 0 0 1 0 4a2 2 0 0 1 0 4a2 2 0 0 1 0 4a2 2 0 0 1 0 4" />
+          <path d="M27 4a2 2 0 0 0 0 4a2 2 0 0 0 0 4a2 2 0 0 0 0 4a2 2 0 0 0 0 4" />
+          <path d="M18.5 3v18M21.5 3v18" />
+        </>
+      );
+    case 'bridge':
+      return (
+        <>
+          <path d="M20 2l10 10-10 10-10-10z" />
+          <path d="M2 12h8M30 12h8" />
+          <path d="M13 6.5l3 1.5-1.5 3z" fill="currentColor" />
+        </>
+      );
+    case 'timer555':
+      return (
+        <>
+          <rect x="10" y="3" width="20" height="18" rx="1.5" />
+          <path d="M4 8h6M4 16h6M30 12h6" />
+          <text x="20" y="15" fontSize="8" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">
+            555
+          </text>
+        </>
+      );
     case 'wire':
       return (
         <>

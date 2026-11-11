@@ -62,7 +62,7 @@ const PREFIX: Record<string, number> = { p: 1e-12, n: 1e-9, u: 1e-6, µ: 1e-6, �
  * Returns null if it can't be read.
  */
 export function parseValue(text: string): number | null {
-  const t = text.trim().replace(/\s+/g, '').replace(/(Ω|ohms?|F|V)$/i, '');
+  const t = text.trim().replace(/\s+/g, '').replace(/(Ω|ohms?|F|V|H|Hz)$/i, '');
   // "4k7" style: the prefix letter stands in for the decimal point.
   const rkm = /^(\d+)([pnuµμmkKM])(\d+)$/.exec(t);
   if (rkm) return parseFloat(`${rkm[1]}.${rkm[3]}`) * PREFIX[rkm[2]];

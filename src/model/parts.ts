@@ -19,11 +19,25 @@ export type PartKind =
   | 'switch'
   | 'pushbutton'
   | 'diode'
-  | 'npn';
+  | 'npn'
+  | 'acsource'
+  | 'inductor'
+  | 'transformer'
+  | 'bridge'
+  | 'timer555';
+
+/** Wave shapes an AC source can make. */
+export type Wave = 'sine' | 'square' | 'triangle';
+export const WAVES: Wave[] = ['sine', 'square', 'triangle'];
+/** AC source limits: peak volts, and frequency range (Hz). */
+export const AC_MAX_V = 25;
+export const AC_MIN_F = 1;
+export const AC_MAX_F = 20_000;
+export const AC_DEFAULT_F = 50;
 
 export type Dir = 'l' | 'r' | 'u' | 'd';
 export type Rotation = 0 | 90 | 180 | 270;
-export type Unit = 'Ω' | 'F' | 'V' | 'A' | 'W';
+export type Unit = 'Ω' | 'F' | 'V' | 'A' | 'W' | 'H';
 
 export interface PinDef {
   name: string;
@@ -174,7 +188,70 @@ export const PART_DEFS: Record<PartKind, PartDef> = {
     ],
     bounds: { x: -24, y: -28, w: 56, h: 56 },
   },
+  acsource: {
+    kind: 'acsource',
+    name: 'AC source',
+    prefix: 'AC',
+    pins: twoPin('+', '−'),
+    bounds: { x: -20, y: -20, w: 40, h: 40 },
+    unit: 'V',
+    defaultValue: 5,
+  },
+  inductor: {
+    kind: 'inductor',
+    name: 'Inductor',
+    prefix: 'L',
+    pins: twoPin(),
+    bounds: { x: -26, y: -12, w: 52, h: 22 },
+    unit: 'H',
+    defaultValue: 10e-3,
+  },
+  transformer: {
+    kind: 'transformer',
+    name: 'Transformer',
+    prefix: 'T',
+    pins: [
+      { name: 'Primary 1', x: -40, y: -20, dir: 'l' },
+      { name: 'Primary 2', x: -40, y: 20, dir: 'l' },
+      { name: 'Secondary 1', x: 40, y: -20, dir: 'r' },
+      { name: 'Secondary 2', x: 40, y: 20, dir: 'r' },
+    ],
+    bounds: { x: -26, y: -30, w: 52, h: 60 },
+    defaultValue: 0.5,
+  },
+  bridge: {
+    kind: 'bridge',
+    name: 'Bridge rectifier',
+    prefix: 'BR',
+    pins: [
+      { name: 'AC in (~)', x: -40, y: 0, dir: 'l' },
+      { name: 'AC in (~)', x: 40, y: 0, dir: 'r' },
+      { name: 'DC out (+)', x: 0, y: -40, dir: 'u' },
+      { name: 'DC out (−)', x: 0, y: 40, dir: 'd' },
+    ],
+    bounds: { x: -22, y: -22, w: 44, h: 44 },
+  },
+  // Pin index + 1 is the chip's pin number.
+  timer555: {
+    kind: 'timer555',
+    name: '555 timer',
+    prefix: 'U',
+    pins: [
+      { name: '1 GND', x: -20, y: 60, dir: 'd' },
+      { name: '2 Trigger', x: -60, y: 20, dir: 'l' },
+      { name: '3 Output', x: 60, y: 0, dir: 'r' },
+      { name: '4 Reset', x: 20, y: -60, dir: 'u' },
+      { name: '5 Control', x: 20, y: 60, dir: 'd' },
+      { name: '6 Threshold', x: -60, y: 0, dir: 'l' },
+      { name: '7 Discharge', x: -60, y: -20, dir: 'l' },
+      { name: '8 VCC', x: -20, y: -60, dir: 'u' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
 };
+
+/** Index of each 555 pin (chip pin number − 1). */
+export const P555 = { gnd: 0, trig: 1, out: 2, reset: 3, ctrl: 4, thr: 5, dis: 6, vcc: 7 } as const;
 
 /* ---------- Geometry helpers ---------- */
 
@@ -231,6 +308,22 @@ export function formatValue(v: number, unit: Unit): string {
   if (unit === 'F' && e === -3) e = -6;
   const num = parseFloat((v / 10 ** e).toPrecision(e === -6 && unit === 'F' && Math.abs(v) >= 1e-3 ? 4 : 3));
   return `${num} ${PREFIXES[e]}${unit}`;
+}
+
+/** "50 Hz", "1.5 kHz". */
+export function formatFreq(f: number): string {
+  return f >= 1000 ? `${parseFloat((f / 1000).toPrecision(3))} kHz` : `${parseFloat(f.toPrecision(3))} Hz`;
+}
+
+/** The value printed beside a part on the canvas, or null for none. */
+export function valueLabel(part: { kind: PartKind; value?: number; freq?: number; wave?: Wave }): string | null {
+  const def = PART_DEFS[part.kind];
+  // Transformer: its turns, primary to secondary.
+  if (part.kind === 'transformer') return `turns 1:${parseFloat((part.value ?? 0.5).toPrecision(3))}`;
+  if (part.value === undefined || !def.unit) return null;
+  const v = formatValue(part.value, def.unit);
+  if (part.kind === 'acsource') return `${v} pk ${formatFreq(part.freq ?? AC_DEFAULT_F)}`;
+  return v;
 }
 
 /**

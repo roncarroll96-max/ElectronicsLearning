@@ -110,3 +110,59 @@ export const NPN_2N3904: BjtModel = { is: 6.734e-15, bf: 200, br: 0.7371, tf: 30
  * Cold, its resistance is a tenth of the hot value.
  */
 export const LAMP = { v: 9, i: 0.05, exponent: 0.55, coldRatio: 0.1 };
+
+/**
+ * 1N4001-style rectifier diode (its standard SPICE model), used for the four
+ * diodes inside the bridge rectifier: rated 1 A, with about 15 pF of junction
+ * capacitance.
+ */
+export const DIODE_1N4001: DiodeModel = { is: 14.11e-9, n: 1.984, rs: 0.0339 };
+export const RECTIFIER_CJ = 15e-12;
+
+/**
+ * AC source (a signal generator or a transformer-style AC supply): its
+ * internal resistance, Ω. Kept low so it can drive a transformer and a
+ * rectifier the way a mains adapter would.
+ */
+export const AC_SOURCE_R = 1;
+
+/**
+ * An inductor's winding resistance, Ω. Real coils need more turns of thinner
+ * wire for more inductance, so resistance grows with it: about 1.3 Ω at 1 mH,
+ * 4 Ω at 10 mH, 13 Ω at 100 mH and 40 Ω at 1 H, typical of small hobby chokes.
+ */
+export function inductorResistance(henries: number): number {
+  return Math.max(0.05, 40 * Math.sqrt(Math.max(0, henries)));
+}
+
+/**
+ * Small transformer: the primary's inductance (H), the coupling between its
+ * windings (k: 1 would be perfect; real iron-core transformers reach about
+ * 0.99), and each winding's resistance. The secondary's inductance follows
+ * from the turns ratio n: L2 = n²·L1, and its resistance scales the same way.
+ */
+export const TRANSFORMER = { l1: 1, k: 0.99, r1: 5 };
+
+/**
+ * 555 timer (NE555), as its behaviour rather than its 25 transistors:
+ *  - three equal 5 kΩ resistors from VCC to ground set the comparator levels
+ *    (Control sits at ⅔ VCC, the trigger level is half of Control);
+ *  - the output, high, is VCC less about 1.5 V; low, about 10 Ω to ground;
+ *  - the discharge transistor, when on, is about 20 Ω to ground;
+ *  - the chip itself draws about 3 mA (modelled as 3 kΩ across the supply);
+ *  - Reset has a weak pull-up, so leaving it unconnected keeps the chip running.
+ * It needs at least 4.5 V to work (it is treated as reset below 3 V) and
+ * takes at most 16 V (18 V absolute maximum).
+ */
+export const TIMER555 = {
+  divider: 5000,
+  highDrop: 1.5,
+  outR: 10,
+  dischargeR: 20,
+  supplyR: 3000,
+  resetPullUp: 100e3,
+  resetLevel: 0.7,
+  minVcc: 3,
+  /** Off switches and comparator inputs: a tiny leak so no pin floats (1 nS). */
+  off: 1e-9,
+};

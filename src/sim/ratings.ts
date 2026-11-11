@@ -45,6 +45,17 @@ export const RATINGS: Partial<Record<PartKind, Limit[]>> = {
     { quantity: 'reverse', max: 0.3, burn: 1.5 },
     { quantity: 'voltage', max: 16, burn: 24 },
   ],
+  // Small 10 mH-class coil: about 0.5 W lost in its winding.
+  inductor: [{ quantity: 'power', max: 0.5, burn: 1 }],
+  // Small transformer: about 1 W of loss in its windings.
+  transformer: [{ quantity: 'power', max: 1, burn: 2 }],
+  // 1 A bridge rectifier (four 1N4001-type diodes).
+  bridge: [{ quantity: 'current', max: 1, burn: 2 }],
+  // NE555: 4.5–16 V supply (18 V absolute maximum), 200 mA output.
+  timer555: [
+    { quantity: 'voltage', max: 16, burn: 18 },
+    { quantity: 'current', max: 0.2, burn: 0.4 },
+  ],
   // A battery doesn't burn out here, but more than 1 A from a 9 V battery means a short circuit.
   battery: [{ quantity: 'current', max: 1, burn: Infinity }],
 };
@@ -59,13 +70,15 @@ export interface Stress extends Limit {
 function measure(kind: PartKind, q: Quantity, r: PartReading): number {
   switch (q) {
     case 'current':
-      return Math.abs(kind === 'npn' ? r.i[1] : r.i[0]);
+      // Transistor: its collector. Bridge: its + output. 555: its output pin.
+      return Math.abs(kind === 'npn' ? r.i[1] : kind === 'bridge' ? r.i[2] : kind === 'timer555' ? r.i[2] : r.i[0]);
     case 'power':
       return Math.max(0, r.power);
     case 'reverse':
       return Math.max(0, r.v[1] - r.v[0]);
     case 'voltage':
-      return Math.abs(r.v[0] - r.v[1]);
+      // 555: its supply, VCC to GND.
+      return kind === 'timer555' ? Math.abs(r.v[7] - r.v[0]) : Math.abs(r.v[0] - r.v[1]);
   }
 }
 

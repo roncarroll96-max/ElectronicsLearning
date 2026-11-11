@@ -3,9 +3,42 @@
  * Schematic: standard circuit symbols. Realistic: what the physical part looks like.
  */
 import type { Part } from '../model/circuit';
-import { resistorBands } from '../model/parts';
+import { resistorBands, type Wave } from '../model/parts';
 
 const ZIGZAG = 'M-40 0H-18l3-8 6 16 6-16 6 16 6-16 6 16 3-8H40';
+/** Four turns of wire, pins at ±40. */
+const COIL = 'M-40 0H-24a6 6 0 0 1 12 0a6 6 0 0 1 12 0a6 6 0 0 1 12 0a6 6 0 0 1 12 0H40';
+/** One cycle of each AC wave shape, drawn inside an 18-unit-wide window. */
+const WAVE_PATH: Record<Wave, string> = {
+  sine: 'M-9 0c1.5-5 3-7 4.5-7s3 2 4.5 7s3 7 4.5 7s3-2 4.5-7',
+  square: 'M-9 0V-6H0V6H9V0',
+  triangle: 'M-9 0L-4.5 -7L4.5 7L9 0',
+};
+/** The bridge's four diodes: where each sits on the diamond, and which way it points (toward +, away from −). */
+const BRIDGE_DIODES: [number, number, number][] = [
+  [-11, -11, -45],
+  [11, -11, -135],
+  [-11, 11, -135],
+  [11, 11, -45],
+];
+
+/** The 555's pin names, just inside its box. */
+function ChipPins({ real = false }: { real?: boolean }) {
+  const c = `chip-pin${real ? ' real' : ''}`;
+  const e = real ? 32 : 36;
+  return (
+    <>
+      <text className={c} x={-e} y="-17" textAnchor="start">DIS</text>
+      <text className={c} x={-e} y="3" textAnchor="start">THR</text>
+      <text className={c} x={-e} y="23" textAnchor="start">TRIG</text>
+      <text className={c} x={e} y="3" textAnchor="end">OUT</text>
+      <text className={c} x="-20" y={-e + 9} textAnchor="middle">VCC</text>
+      <text className={c} x="20" y={-e + 9} textAnchor="middle">RST</text>
+      <text className={c} x="-20" y={e - 3} textAnchor="middle">GND</text>
+      <text className={c} x="20" y={e - 3} textAnchor="middle">CV</text>
+    </>
+  );
+}
 
 export function SchematicBody({ part }: { part: Part }) {
   switch (part.kind) {
@@ -99,6 +132,47 @@ export function SchematicBody({ part }: { part: Part }) {
           <circle className="sym" cx="4" cy="0" r="24" />
           <path className="sym" d="M-40 0H-8M-8 -14V14M-8 -6L20 -20V-40M-8 6L20 20V40" />
           <path className="sym fill" d="M20 20l-10-1 5-7z" />
+        </>
+      );
+    case 'acsource':
+      return (
+        <>
+          <path className="sym" d="M-40 0H-16M16 0H40" />
+          <circle className="sym" r="16" />
+          <path className="sym" d={WAVE_PATH[part.wave ?? 'sine']} />
+          <path className="sym thin" d="M-12 -20h5M-9.5 -22.5v5" />
+        </>
+      );
+    case 'inductor':
+      return <path className="sym" d={COIL} />;
+    case 'transformer':
+      return (
+        <>
+          <path className="sym" d="M-40 -20H-14M-40 20H-14M40 -20H14M40 20H14" />
+          <path className="sym" d="M-14 -20a5 5 0 0 1 0 10a5 5 0 0 1 0 10a5 5 0 0 1 0 10a5 5 0 0 1 0 10" />
+          <path className="sym" d="M14 -20a5 5 0 0 0 0 10a5 5 0 0 0 0 10a5 5 0 0 0 0 10a5 5 0 0 0 0 10" />
+          <path className="sym" d="M-3 -24V24M3 -24V24" />
+        </>
+      );
+    case 'bridge':
+      return (
+        <>
+          <path className="sym" d="M-40 0H-22M22 0H40M0 -40V-22M0 22V40M-22 0L0 -22L22 0L0 22Z" />
+          {BRIDGE_DIODES.map(([x, y, a]) => (
+            <g key={`${x},${y}`} transform={`translate(${x} ${y}) rotate(${a})`}>
+              <path className="sym fill" d="M-4 -4.5L4 0L-4 4.5Z" />
+              <path className="sym" d="M4 -4.5V4.5" />
+            </g>
+          ))}
+        </>
+      );
+    case 'timer555':
+      return (
+        <>
+          <path className="sym" d="M-60 -20H-40M-60 0H-40M-60 20H-40M40 0H60M-20 -60V-40M20 -60V-40M-20 40V60M20 40V60" />
+          <rect className="sym" x="-40" y="-40" width="80" height="80" rx="3" />
+          <text className="chip-name" y="5">555</text>
+          <ChipPins />
         </>
       );
     case 'ground':
@@ -250,6 +324,58 @@ export function RealisticBody({ part }: { part: Part }) {
           <text x="-3" y="3" className="npn-text">
             NPN
           </text>
+        </>
+      );
+    case 'acsource':
+      return (
+        <>
+          <path className="lead" d="M-40 0H-20M20 0H40" />
+          <rect x="-20" y="-19" width="40" height="38" rx="5" fill="#2b3340" stroke="#151a21" />
+          <rect x="-15" y="-14" width="30" height="17" rx="2" fill="#123d2e" />
+          <path d={WAVE_PATH[part.wave ?? 'sine']} transform="translate(0 -5.5) scale(1.2 0.8)" fill="none" stroke="#5ff0b0" strokeWidth="1.5" />
+          <circle cx="-8" cy="10.5" r="3" fill="#e5484d" />
+          <circle cx="8" cy="10.5" r="3" fill="#15181d" stroke="#59606e" />
+        </>
+      );
+    case 'inductor':
+      return (
+        <>
+          <path className="lead" d="M-40 0H-24M24 0H40" />
+          <rect x="-24" y="-9" width="48" height="18" rx="9" fill="#3a3f48" />
+          {[-18, -12, -6, 0, 6, 12, 18].map((x) => (
+            <rect key={x} x={x - 2.6} y="-10" width="5.2" height="20" rx="2.6" fill="#c8813a" stroke="#8a5420" strokeWidth="0.8" />
+          ))}
+        </>
+      );
+    case 'transformer':
+      return (
+        <>
+          <path className="lead" d="M-40 -20H-20M-40 20H-20M40 -20H20M40 20H20" />
+          <rect x="-24" y="-28" width="48" height="56" rx="3" fill="#5b616b" stroke="#3a3f47" />
+          <path d="M-24 -18H24M-24 -8H24M-24 2H24M-24 12H24M-24 22H24" stroke="#4a4f58" strokeWidth="1" />
+          <rect x="-18" y="-22" width="14" height="44" rx="3" fill="#c8813a" stroke="#8a5420" />
+          <rect x="4" y="-22" width="14" height="44" rx="3" fill="#d39a4a" stroke="#8a5420" />
+        </>
+      );
+    case 'bridge':
+      return (
+        <>
+          <path className="lead" d="M-40 0H-20M20 0H40M0 -40V-20M0 20V40" />
+          <rect x="-20" y="-20" width="40" height="40" rx="3" fill="#23262c" stroke="#0e1013" />
+          <text className="chip-mark" x="-12" y="3.5">~</text>
+          <text className="chip-mark" x="12" y="3.5">~</text>
+          <text className="chip-mark" y="-9">+</text>
+          <text className="chip-mark" y="15">−</text>
+        </>
+      );
+    case 'timer555':
+      return (
+        <>
+          <path className="lead" d="M-60 -20H-36M-60 0H-36M-60 20H-36M36 0H60M-20 -60V-36M20 -60V-36M-20 36V60M20 36V60" />
+          <rect x="-36" y="-36" width="72" height="72" rx="4" fill="#1f2228" stroke="#0e1013" />
+          <circle cx="-26" cy="-26" r="3" fill="#2f333b" />
+          <text className="chip-name real" y="-2">NE555</text>
+          <ChipPins real />
         </>
       );
     case 'ground':

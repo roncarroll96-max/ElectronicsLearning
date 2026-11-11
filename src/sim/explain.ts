@@ -115,6 +115,36 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
             why: `It had ${V(b.value)} across it; it’s rated for 16 V.`,
             fix: 'Use a capacitor rated for a higher voltage than your supply.',
           };
+    case 'inductor':
+      return {
+        headline,
+        why: `${W(b.value)} was turned into heat in its winding; a small coil like this takes about 0.5 W before its thin wire and insulation overheat.`,
+        fix: 'Limit the current through it with a resistor in series, or use a coil with a lower resistance.',
+      };
+    case 'transformer':
+      return {
+        headline,
+        why: `${W(b.value)} was lost as heat in its windings, more than the 1 W a small transformer can shed. Something on the secondary side was drawing far too much current (a short, or too small a load resistance).`,
+        fix: 'Check the secondary side for a short circuit, and make sure the load draws less current.',
+      };
+    case 'bridge':
+      return {
+        headline,
+        why: `${A(b.value)} flowed out of it; its diodes are rated for about 1 A.`,
+        fix: 'Draw less current from the DC side: a larger load resistance, and no short across + and −.',
+      };
+    case 'timer555':
+      return b.quantity === 'voltage'
+        ? {
+            headline,
+            why: `It was powered from ${V(b.value)}; a 555 takes at most 16 V (18 V destroys it).`,
+            fix: 'Run it from 4.5 V to 15 V: a 9 V battery is ideal.',
+          }
+        : {
+            headline,
+            why: `${A(b.value)} flowed through its output pin; it can drive about 200 mA.`,
+            fix: 'Put a resistor in series with whatever the output drives, or switch bigger loads with a transistor.',
+          };
     default:
       return { headline, why: `It was pushed to ${fmt(b.value, b.quantity)}, past its limit.`, fix: 'Reduce the current through it.' };
   }
@@ -122,7 +152,7 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
 
 /** A warning for a part running above its rating but not (yet) burning. */
 export function explainHot(part: Part, s: Stress, r: PartReading): string {
-  if (part.kind === 'battery') {
+  if (part.kind === 'battery' || part.kind === 'acsource') {
     return `Short circuit! ${A(r.i[0])} flows, limited only by the battery’s own internal resistance. A real battery would get hot and drain in minutes. Add a resistor or a load to limit the current.`;
   }
   const what = s.quantity === 'reverse' ? 'reverse voltage' : s.quantity;

@@ -671,6 +671,35 @@ p {
   letter-spacing: 0.04em;
 }
 
+.chip-name {
+  font: 700 15px var(--font-sans);
+  fill: var(--symbol);
+  text-anchor: middle;
+}
+
+.chip-name.real {
+  font-size: 12px;
+  fill: #c9ced6;
+  letter-spacing: 0.04em;
+}
+
+.chip-pin {
+  font: 600 7px var(--font-sans);
+  fill: var(--symbol);
+  opacity: 0.75;
+}
+
+.chip-pin.real {
+  fill: #8f96a2;
+  opacity: 1;
+}
+
+.chip-mark {
+  font: 700 11px var(--font-sans);
+  fill: #c9ced6;
+  text-anchor: middle;
+}
+
 /* Pins: visible on hover, when selected, and while wiring */
 .pin {
   cursor: crosshair;

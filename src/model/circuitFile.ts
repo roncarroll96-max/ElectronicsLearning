@@ -5,7 +5,7 @@
  * explanation, and never half-loaded.
  */
 import type { BurnInfo, Circuit, Part, PinRef, Wire } from './circuit';
-import { PART_DEFS, type PartKind, type Rotation } from './parts';
+import { AC_MAX_F, AC_MIN_F, PART_DEFS, WAVES, type PartKind, type Rotation, type Wave } from './parts';
 
 export const FILE_FORMAT = 'circuit-lab';
 export const FILE_VERSION = 1;
@@ -58,6 +58,8 @@ function checkPart(raw: unknown, n: number): Checked<Part> {
   if (typeof raw.on === 'boolean') part.on = raw.on;
   if (isNum(raw.pos)) part.pos = Math.min(1, Math.max(0, raw.pos));
   if (isNum(raw.light)) part.light = Math.min(1, Math.max(0, raw.light));
+  if (isNum(raw.freq)) part.freq = Math.min(AC_MAX_F, Math.max(AC_MIN_F, raw.freq));
+  if (WAVES.includes(raw.wave as Wave)) part.wave = raw.wave as Wave;
   const burn = checkBurn(raw.burn);
   if (burn) part.burn = burn;
   return { ok: true, value: part };

@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { updatePart, type Circuit, type Part, type Wire } from '../model/circuit';
-import { PART_DEFS, formatReading, formatValue } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
 import { explainBurn, explainHot } from '../sim/explain';
 import { ldrResistance } from '../sim/models';
 import { stressOf } from '../sim/ratings';
@@ -63,6 +63,67 @@ function rowsFor(part: Part, sim: SimResult): { rows: Row[]; note?: string } | n
           : charging
             ? 'Charging: its voltage is rising, and the current shrinks as it fills.'
             : 'Discharging: it is giving its stored charge back to the circuit.',
+      };
+    }
+    case 'acsource':
+      return {
+        rows: [
+          ['Voltage now', formatReading(v[0] - v[1], 'V')],
+          ['Current now', formatReading(-i[0], 'A')],
+          ['Swing', `±${formatValue(part.value ?? 5, 'V')} at ${formatFreq(part.freq ?? AC_DEFAULT_F)}`],
+        ],
+        note: 'The voltage keeps changing: probe it with the oscilloscope to see the wave.',
+      };
+    case 'inductor': {
+      const amps = i[0];
+      const l = part.value ?? 0;
+      return {
+        rows: [
+          ['Current', formatReading(Math.abs(amps), 'A')],
+          ['Voltage across', formatReading(v[0] - v[1], 'V')],
+          ['Energy stored', formatReading(0.5 * l * amps * amps, 'W').replace('W', 'J')],
+        ],
+        note: 'A coil resists any change in its current: it builds up gradually, and fights to keep flowing when cut off.',
+      };
+    }
+    case 'transformer':
+      return {
+        rows: [
+          ['Primary voltage', formatReading(v[0] - v[1], 'V')],
+          ['Secondary voltage', formatReading(v[2] - v[3], 'V')],
+          ['Primary current', formatReading(Math.abs(i[0]), 'A')],
+          ['Secondary current', formatReading(Math.abs(i[2]), 'A')],
+        ],
+        note: 'These are the values at this instant; with AC they swing back and forth. Steady DC passes no voltage to the secondary.',
+      };
+    case 'bridge':
+      return {
+        rows: [
+          ['AC in (between ~ pins)', formatReading(v[0] - v[1], 'V')],
+          ['DC out (+ to −)', formatReading(v[2] - v[3], 'V')],
+          ['DC current out', formatReading(Math.max(0, -i[2]), 'A')],
+          ['Power lost in diodes', formatReading(r.power, 'W')],
+        ],
+      };
+    case 'timer555': {
+      const g = v[P555.gnd];
+      const vcc = v[P555.vcc] - g;
+      const out = v[P555.out] - g;
+      const high = out > vcc / 2 && vcc > 1;
+      return {
+        rows: [
+          ['Output', `${high ? 'High' : 'Low'} · ${formatReading(out, 'V')}`],
+          ['Supply (VCC)', formatReading(vcc, 'V')],
+          ['Trigger', `${formatReading(v[P555.trig] - g, 'V')} (switches high below ${formatReading((v[P555.ctrl] - g) / 2, 'V')})`],
+          ['Threshold', `${formatReading(v[P555.thr] - g, 'V')} (switches low above ${formatReading(v[P555.ctrl] - g, 'V')})`],
+          ['Output current', formatReading(Math.abs(i[P555.out]), 'A')],
+        ],
+        note:
+          vcc < 4.5
+            ? 'A 555 needs at least 4.5 V between VCC (pin 8) and GND (pin 1).'
+            : v[P555.reset] - g < 0.7
+              ? 'Reset (pin 4) is held low, so the timer is stopped.'
+              : undefined,
       };
     }
     case 'potentiometer':
@@ -243,6 +304,8 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
           onChange={(pos, record) => edit((c) => updatePart(c, part.id, { pos }), record)}
         />
       );
+    case 'acsource':
+      return <AcControls part={part} edit={edit} />;
     case 'ldr':
       return (
         <Slider
@@ -255,6 +318,41 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
     default:
       return null;
   }
+}
+
+/** Frequencies are picked on a log scale: the slider's 0–1 covers 1 Hz to 20 kHz evenly by decades. */
+const LOG_SPAN = Math.log(AC_MAX_F / AC_MIN_F);
+const freqAt = (pos: number) => parseFloat((AC_MIN_F * Math.exp(pos * LOG_SPAN)).toPrecision(2));
+const posOf = (f: number) => Math.log(f / AC_MIN_F) / LOG_SPAN;
+const WAVE_NAMES: Record<Wave, string> = { sine: 'Sine', square: 'Square', triangle: 'Triangle' };
+const FREQ_PICKS = [1, 50, 440, 1000];
+
+function AcControls({ part, edit }: { part: Part; edit: EditFn }) {
+  const f = part.freq ?? AC_DEFAULT_F;
+  const wave = part.wave ?? 'sine';
+  const setFreq = (freq: number, record = true) => edit((c) => updatePart(c, part.id, { freq }), record);
+  return (
+    <>
+      <Slider label="Frequency" value={posOf(f)} format={() => formatFreq(f)} onChange={(p, record) => setFreq(freqAt(p), record)} />
+      <div className="chips" role="group" aria-label="Frequency presets">
+        {FREQ_PICKS.map((o) => (
+          <button key={o} className={`chip${o === f ? ' on' : ''}`} aria-pressed={o === f} onClick={() => setFreq(o)}>
+            {formatFreq(o)}
+          </button>
+        ))}
+      </div>
+      <div className="insp-control">
+        <span className="insp-control-label">Wave shape</span>
+        <div className="segmented insp-seg" role="group" aria-label="Wave shape">
+          {WAVES.map((w) => (
+            <button key={w} className={w === wave ? 'on' : ''} aria-pressed={w === wave} onClick={() => edit((c) => updatePart(c, part.id, { wave: w }))}>
+              {WAVE_NAMES[w]}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
 }
 
 /** A 0–1 slider where one drag is one undo step. */

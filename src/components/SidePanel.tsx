@@ -190,7 +190,7 @@ function Inspector({ circuit, selection, sim, stress, edit, pressed, onPress, su
 }
 
 /** Two-pin parts with a + and − that can be turned around. */
-const POLARIZED = ['led', 'diode', 'buzzer', 'capacitor', 'battery'];
+const POLARIZED = ['led', 'diode', 'buzzer', 'capacitor', 'battery', 'acsource'];
 
 function InspectorActions({ onRotate, onDelete, onFlip }: { onRotate?: () => void; onDelete: () => void; onFlip?: () => void }) {
   return (

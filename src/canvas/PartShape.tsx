@@ -1,6 +1,6 @@
 import type { PointerEvent as RPointerEvent } from 'react';
 import { pinKey, type Part, type PinRef } from '../model/circuit';
-import { DIR_VEC, PART_DEFS, formatValue, rotateDir, rotatePoint, rotatedBounds, type Dir } from '../model/parts';
+import { DIR_VEC, PART_DEFS, rotateDir, rotatePoint, rotatedBounds, valueLabel, type Dir } from '../model/parts';
 import type { View } from '../components/TopBar';
 import { RealisticBody, SchematicBody } from './PartBodies';
 import { PartGlow, Scorch, type PartLive } from './LiveFx';
@@ -76,14 +76,16 @@ const PIN_LABELS: Partial<Record<Part['kind'], string[]>> = {
   buzzer: ['+', '−'],
   capacitor: ['+', '−'],
   battery: ['+', '−'],
+  acsource: ['+', '−'],
+  bridge: ['~', '~', '+', '−'],
   potentiometer: ['A', 'B', 'W'],
   npn: ['B', 'C', 'E'],
 };
 
 export function PinLabels({ part, view }: { part: Part; view: View }) {
   const labels = PIN_LABELS[part.kind];
-  // The realistic battery already has its + printed on it.
-  if (!labels || (part.kind === 'battery' && view === 'realistic')) return null;
+  // The realistic battery and bridge already have their markings printed on them.
+  if (!labels || ((part.kind === 'battery' || part.kind === 'bridge') && view === 'realistic')) return null;
   const pins = PART_DEFS[part.kind].pins;
   return (
     <>
@@ -141,7 +143,7 @@ export function PartLabel({ part }: { part: Part }) {
   if (part.kind === 'ground') return null;
   const def = PART_DEFS[part.kind];
   const rb = rotatedBounds(def.bounds, part.rot);
-  const value = part.value !== undefined && def.unit ? formatValue(part.value, def.unit) : null;
+  const value = valueLabel(part);
   const horizontal = part.rot % 180 === 0;
 
   if (horizontal) {
