@@ -19,6 +19,8 @@ export interface PartLive {
   hot: boolean;
   /** A 7-segment display: each segment's brightness (a–g, dp). */
   segs?: number[];
+  /** An Arduino sending over Serial right now (its TX light). */
+  tx?: boolean;
   /** A logic chip: which of its output pins are HIGH. */
   highs?: number[];
 }
@@ -133,6 +135,12 @@ export function PartGlow({ part, view, live }: { part: Part; view: View; live: P
       <g className="live-fx">
         <circle cx="132" cy="-61.5" r="9" fill="url(#glow-led)" opacity="0.3" />
         <rect x="128" y="-64" width="8" height="5" rx="1" fill="#8dff9a" />
+        {live.tx && (
+          <>
+            <circle cx="-104" cy="-51.5" r="11" fill="url(#glow-led)" opacity="0.8" />
+            <rect x="-108" y="-54" width="8" height="5" rx="1" fill="#ffb070" />
+          </>
+        )}
         {g > 0 && (
           <>
             <circle cx="-104" cy="-61.5" r="13" fill="url(#glow-led)" opacity="0.9" />

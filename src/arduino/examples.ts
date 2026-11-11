@@ -1,7 +1,6 @@
 /**
- * Built-in example sketches for the Arduino part: the classic first programs.
- * Until the code editor arrives (milestone 3, step 3), they're how a board
- * gets a program; afterwards they're starting points.
+ * Built-in example sketches for the Arduino part: the classic first programs,
+ * picked from the board's panel as starting points for the code editor.
  */
 
 export const BLINK_SKETCH = `// Blink: the board's own LED (pin 13) on for a second, off for a second.

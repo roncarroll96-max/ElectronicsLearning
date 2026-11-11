@@ -107,6 +107,9 @@ export function App() {
   const liveRef = useRef<LiveSim | null>(null);
   const sound = useSound((port) => liveRef.current?.connectAudio(port));
   const live = useLiveSim(simCircuit, scopeAt, sound.on);
+  // Arduinos sending over Serial right now (a stable set, so the canvas only redraws when it changes).
+  const sendingKey = [...live.arduinos.views].filter(([, v]) => v.tx).map(([id]) => id).join(',');
+  const sending = useMemo(() => new Set(sendingKey ? sendingKey.split(',') : []), [sendingKey]);
   liveRef.current = live;
   const hasSpeaker = simCircuit.parts.some((p) => p.kind === 'speaker' && !p.burn);
   const sim = live.sim;
@@ -510,6 +513,7 @@ export function App() {
           sim={sim}
           stress={live.stress}
           soundLevels={live.levels}
+          sending={sending}
           meter={meter}
           onMeter={setMeter}
           scope={scope}

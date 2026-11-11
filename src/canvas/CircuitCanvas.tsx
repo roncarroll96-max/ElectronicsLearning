@@ -68,6 +68,8 @@ interface Props {
   stress?: SimResult;
   /** How loudly each speaker is sounding (rms of its changing current, A). */
   soundLevels?: ReadonlyMap<string, number>;
+  /** Arduinos that sent something over Serial just now (their TX light flashes). */
+  sending?: ReadonlySet<string>;
   meter: MeterState;
   onMeter: (m: MeterState) => void;
   scope: ScopeState;
@@ -135,7 +137,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, soundLevels, meter, onMeter, scope, onScope, onPress, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, soundLevels, sending, meter, onMeter, scope, onScope, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -185,10 +187,11 @@ export function CircuitCanvas(props: Props) {
       const fx = liveOf(p, r, !!s && s.level !== 'ok');
       // A speaker sounds when its current is changing (a steady current just holds the cone still).
       if (p.kind === 'speaker' && !p.burn) fx.sound = (soundLevels?.get(p.id) ?? 0) > 0.002;
+      if (p.kind === 'arduino' && !p.burn) fx.tx = !!sending?.has(p.id);
       out.set(p.id, fx);
     }
     return out;
-  }, [circuit.parts, sim, stress, soundLevels]);
+  }, [circuit.parts, sim, stress, soundLevels, sending]);
 
   // Start with the world origin in the middle of the canvas.
   useLayoutEffect(() => {
