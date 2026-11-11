@@ -32,6 +32,7 @@ Then open http://localhost:5180.
 - Milestone 2, step 2: oscilloscope. Two channels probed like the multimeter, sampled at every simulation step; volts/division, position, time/division, trigger, Auto, and readings of voltage, range and frequency; the panel can be dragged anywhere and docked back. Done.
 - Milestone 2, step 3: sound. A speaker part plays the simulated waveform; buzzers play their own tone; sound button and volume in the top bar (off on the first visit), with a limiter. The simulator now runs in a background thread. Done (fast transistor tone circuits are still too demanding to play live: a later speed-up task).
 - Milestone 2, step 4: new parts. An AC source (signal generator: up to 25 V peak, 1 Hz to 20 kHz, sine, square or triangle), an inductor, a transformer, a bridge rectifier and a 555 timer, each with readings, ratings and a "Why this value?" explanation. Done.
+- Milestone 2, step 5: the Sound & Timing track, 10 lessons: the oscilloscope, a two-transistor blinker, from blink to beep, the 555 one-shot, the 555 blinker, 555 tones (tune to A, 440 Hz), a light theremin, AC signals, rectifiers, and a DC power supply project. Lesson steps can now check what the scope measures, whether an LED is blinking, and whether a speaker is sounding. Each lesson is proven completable by an automated walk-through. Done.
 
 ### Canvas controls
 

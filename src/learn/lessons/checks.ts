@@ -1,6 +1,6 @@
 /** Small, readable questions a lesson step can ask about the circuit. */
-import { addPart, addWire, createPart, newId, type Circuit, type Part } from '../../model/circuit';
-import type { PartKind, Rotation } from '../../model/parts';
+import { addPart, addWire, createPart, newId, type Circuit, type Part, type PartPatch } from '../../model/circuit';
+import { PART_DEFS, type PartKind, type Rotation } from '../../model/parts';
 import type { MeterMode } from '../../meter/meter';
 import { probePin } from '../../meter/meter';
 import type { CheckCtx } from './types';
@@ -83,6 +83,8 @@ interface Placed {
   y: number;
   rot?: Rotation;
   value?: number;
+  /** Other settings: an AC source's frequency, a light level… */
+  set?: PartPatch;
 }
 
 /** A starter circuit: parts at grid positions, wires as [partIndex, pin, partIndex, pin]. */
@@ -90,7 +92,7 @@ export function starter(placed: Placed[], wires: [number, number, number, number
   return () => {
     let c: Circuit = { parts: [], wires: [] };
     for (const p of placed) {
-      const part = { ...createPart(p.kind, p.x, p.y), rot: p.rot ?? 0, ...(p.value !== undefined ? { value: p.value } : {}) };
+      const part = { ...createPart(p.kind, p.x, p.y), rot: p.rot ?? 0, ...(p.value !== undefined ? { value: p.value } : {}), ...p.set };
       c = addPart(c, part);
     }
     for (const [a, pa, b, pb] of wires) {
@@ -136,3 +138,35 @@ export const touches = (ctx: CheckCtx, part: Part, pin: number, kind: PartKind) 
 /** A two-pin part sits between a part of kind A (one side) and kind B (the other). */
 export const bridges = (ctx: CheckCtx, part: Part, a: PartKind, b: PartKind) =>
   [0, 1].some((i) => touches(ctx, part, i, a) && touches(ctx, part, 1 - i, b));
+
+/* ---------- Time, the oscilloscope and sound (Sound & Timing) ---------- */
+
+/** The scope channel (0 or 1) whose probe sits on this pin's net, or −1. */
+export function scopeChannel(ctx: CheckCtx, p: Part | undefined, pin: number): number {
+  if (!p || !ctx.scope.open) return -1;
+  return ctx.scope.pins.findIndex((r) => !!r && ctx.t.joined(r, { part: p.id, pin }));
+}
+
+/** A scope probe touches this pin (or anything wired to it). */
+export const scopeOn = (ctx: CheckCtx, p: Part | undefined, pin: number) => scopeChannel(ctx, p, pin) >= 0;
+
+/** The frequency the scope measures at this pin (null: not probed, or not repeating). */
+export function scopeFreq(ctx: CheckCtx, p: Part | undefined, pin: number): number | null {
+  const ch = scopeChannel(ctx, p, pin);
+  return ch < 0 ? null : ctx.scope.freq[ch];
+}
+
+/** The lowest and highest voltage the scope has seen at this pin lately. */
+export function scopeRange(ctx: CheckCtx, p: Part | undefined, pin: number): [number, number] | null {
+  const ch = scopeChannel(ctx, p, pin);
+  return ch < 0 ? null : ctx.scope.range[ch];
+}
+
+/** Over the last few seconds this part's current has been both above `on` and clearly off (an LED blinking). */
+export function blinking(ctx: CheckCtx, p: Part | undefined, on = 1e-3): boolean {
+  const s = p && ctx.recent.swing(p.id);
+  return !!s && s.iMax >= on && s.iMin < on / 5;
+}
+
+/** A part's value, or its kind's default. */
+export const valueOf = (p: Part | undefined) => p?.value ?? (p ? PART_DEFS[p.kind].defaultValue : undefined) ?? 0;

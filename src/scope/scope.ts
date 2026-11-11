@@ -49,6 +49,28 @@ export function scopePins(c: Circuit, s: ScopeState): [PinRef | null, PinRef | n
   return [s.on[0] ? probePin(c, s.probes[0]) : null, s.on[1] ? probePin(c, s.probes[1]) : null];
 }
 
+/** What the oscilloscope shows, as a lesson sees it. */
+export interface ScopeView {
+  open: boolean;
+  /** The pin each channel's probe touches (null: not on a pin, or the channel is off). */
+  pins: [PinRef | null, PinRef | null];
+  /** Each channel's frequency over the last few seconds (null: not repeating). */
+  freq: [number | null, number | null];
+  /** Each channel's lowest and highest voltage over the last few seconds. */
+  range: [[number, number] | null, [number, number] | null];
+}
+
+/** What the scope shows over the last few seconds, for lesson checks. */
+export function scopeView(s: ScopeState, pins: [PinRef | null, PinRef | null], trace: Trace, now: number): ScopeView {
+  const t0 = now - 4;
+  const range = (ch: 0 | 1): [number, number] | null => {
+    const st = pins[ch] && trace.length ? trace.stats(ch, t0, now) : null;
+    return st ? [st.min, st.max] : null;
+  };
+  const freq = (ch: 0 | 1) => (pins[ch] && trace.length ? trace.frequency(ch, t0, now) : null);
+  return { open: s.open, pins, freq: [freq(0), freq(1)], range: [range(0), range(1)] };
+}
+
 /** The smallest standard volts/division that fits a span in about `divs` divisions. */
 function fitVDiv(span: number, divs: number): number {
   return V_DIVS.find((v) => v * divs >= span) ?? V_DIVS[V_DIVS.length - 1];

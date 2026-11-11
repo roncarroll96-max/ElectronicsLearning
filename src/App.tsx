@@ -10,6 +10,7 @@ import { HelpPanel, INITIAL_HELP, type HelpState } from './components/HelpPanel'
 import { diagnose, type Issue } from './learn/diagnose';
 import { lessonById, nextLesson } from './learn/lessons';
 import { advance, currentStep, isComplete } from './learn/lessons/progress';
+import { Recorder } from './learn/lessons/recorder';
 import { topology } from './learn/topology';
 import { hasBeenWelcomed, markWelcomed, Welcome, type WelcomeChoice } from './components/Welcome';
 import { MeterPanel } from './meter/MeterPanel';
@@ -20,7 +21,7 @@ import { worstBurnout } from './sim/ratings';
 import { useLiveSim, type LiveSim } from './state/useLiveSim';
 import { useSound } from './audio/sound';
 import { TimeControls } from './components/TimeControls';
-import { INITIAL_SCOPE, scopePins, type ScopeState } from './scope/scope';
+import { INITIAL_SCOPE, scopePins, scopeView, type ScopeState } from './scope/scope';
 import { ScopePanel } from './scope/ScopePanel';
 import { PART_DEFS } from './model/parts';
 import { useCircuit } from './state/useCircuit';
@@ -154,14 +155,29 @@ export function App() {
 
   const lessonActive = !!lesson && activeWorkspace === `lesson:${lesson.id}`;
   const done = lesson ? (progress[lesson.id] ?? []) : [];
+  // Timing lessons ask how readings moved over the last few seconds ("is the LED blinking?").
+  const recorder = useRef(new Recorder()).current;
   useEffect(() => {
     if (!lessonActive || !lesson) return;
+    if (live.dynamic) recorder.record(live.time, sim);
+    else recorder.clear();
     const before = progress[lesson.id] ?? [];
-    const after = advance(lesson, before, { c: liveCircuit, sim, t: topology(liveCircuit), meter, reading: meterReading });
+    const after = advance(lesson, before, {
+      c: liveCircuit,
+      sim,
+      t: topology(liveCircuit),
+      meter,
+      reading: meterReading,
+      time: live.time,
+      scope: scopeView(scope, scopeAt, live.trace, live.time),
+      recent: recorder,
+      sound: sound.on,
+      levels: live.levels,
+    });
     if (after.length === before.length) return;
     setProgress((p) => ({ ...p, [lesson.id]: after }));
     if (isComplete(lesson, after)) setCompleted((s) => new Set(s).add(lesson.id));
-  }, [sim, meterReading, lessonActive]);
+  }, [sim, meterReading, lessonActive, scopeAt, sound.on]);
 
   const openLesson = useCallback((id: string) => {
     setMode('learn');

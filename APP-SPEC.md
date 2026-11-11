@@ -37,7 +37,7 @@ Built in three milestones. Each milestone is a usable app on its own.
 16. **Time-based simulation:** capacitors charging, oscillators, and timers behave correctly over time.
 17. **Oscilloscope:** two channels showing voltage over time at any probed point.
 18. **Real sound:** speaker parts play the actual simulated waveform through the computer's speakers. Starts muted on first visit, with a master volume slider and a built-in limiter so no circuit can be harmfully loud.
-19. **Sound & Timing track:** about 10 lessons (oscillators, the 555 timer, sound effects).
+19. **Sound & Timing track:** about 10 lessons (oscillators, the 555 timer, sound effects). *Built in milestone 2, step 5:* Watching time: the oscilloscope; Oscillators: a two-transistor blinker; From blink to beep; The 555 timer: a one-shot (with a 10-second-timer challenge); The 555 timer: a blinker; The 555 timer: making tones (with a tune-to-440 Hz challenge); Sound effects: a light theremin; AC: signals that swing; Rectifiers: AC to DC; Project: a DC power supply. Lesson checks can see the scope's measured frequency and range over the last 4 s, how each part's readings ranged over the last 4 s (so "the LED is blinking" can be checked), how loudly each speaker is driven, and whether sound is on.
 19a. **AC and power parts (added 2026-11-10):** a low-voltage AC source / signal generator with adjustable frequency (never household mains), half-wave and full-wave (4-diode bridge) rectifiers with a smoothing capacitor, a transformer, and an inductor. Shown on the oscilloscope: the wave chopped, flipped, then smoothed, with ripple shrinking as the capacitor grows.
 
 **Milestone 3: Digital Logic and Arduino**

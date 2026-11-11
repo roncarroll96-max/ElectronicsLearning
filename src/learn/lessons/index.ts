@@ -1,5 +1,6 @@
 import { COMPONENTS } from './components';
 import { FOUNDATIONS } from './foundations';
+import { TIMING } from './timing';
 import type { Lesson, TrackId } from './types';
 
 export interface Track {
@@ -14,6 +15,7 @@ export interface Track {
 export const TRACKS: Track[] = [
   { id: 'foundations', name: 'Foundations', desc: 'Voltage, current, resistance, Ohm’s law', lessons: FOUNDATIONS, planned: 10 },
   { id: 'components', name: 'Components in Depth', desc: 'Diodes, capacitors, transistors, sensors', lessons: COMPONENTS, planned: 10 },
+  { id: 'timing', name: 'Sound & Timing', desc: 'The oscilloscope, oscillators, the 555 timer, AC and power supplies', lessons: TIMING, planned: 10 },
 ];
 
 export const LESSONS: Lesson[] = TRACKS.flatMap((t) => t.lessons);

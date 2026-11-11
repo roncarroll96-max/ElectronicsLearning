@@ -66,8 +66,7 @@ export function TrackList({
         );
       })}
       <div className="track-later">
-        <span className="track-name">Sound &amp; Timing</span> and <span className="track-name">Digital &amp; Arduino</span> arrive
-        in later milestones.
+        <span className="track-name">Digital &amp; Arduino</span> arrives in a later milestone.
       </div>
     </div>
   );

@@ -7,7 +7,13 @@ import { describe, expect, it } from 'vitest';
 import { addPart, addWire, createPart, deleteItems, flipPart, newId, updatePart, type Circuit, type Part } from '../../model/circuit';
 import type { PartKind } from '../../model/parts';
 import { circuitWithMeter, fuseOverload, INITIAL_METER, readMeter, type MeterMode, type MeterState } from '../../meter/meter';
+import type { PinRef } from '../../model/circuit';
+import { AUDIO_RATE, usesTime } from '../../sim/live';
 import { simulate, type SimResult } from '../../sim/simulate';
+import { Trace } from '../../scope/trace';
+import { INITIAL_SCOPE, scopeView } from '../../scope/scope';
+import { Recorder } from './recorder';
+import { SPEAKER } from '../../sim/models';
 import { TransientSim } from '../../sim/transient';
 import { BASE_STEP } from '../../state/useLiveSim';
 import { worstBurnout } from '../../sim/ratings';
@@ -22,6 +28,14 @@ function play(id: string) {
   let c: Circuit = lesson.starter ? lesson.starter() : { parts: [], wires: [] };
   let meter: MeterState = { ...INITIAL_METER };
   let done: string[] = [];
+  // The oscilloscope (its probes and record), the readings' recent history, and the sound switch.
+  let scope = { open: false, pins: [null, null] as [PinRef | null, PinRef | null] };
+  const trace = new Trace();
+  const recorder = new Recorder();
+  let sound = false;
+  // Each speaker's loudness since the last tick: the changing part of its current, rms (as the live engine measures it).
+  let levels = new Map<string, number>();
+  const acc = new Map<string, { sum: number; sq: number; n: number }>();
 
   // Like the app: a circuit with capacitors runs in time (the learner waits, the clock moves);
   // without them it's solved once. The stepper is rebuilt on every change, keeping charge.
@@ -29,7 +43,7 @@ function play(id: string) {
   let engineFor: [Circuit, MeterState] | null = null;
   const live = (): SimResult => {
     const sc = circuitWithMeter(c, meter);
-    if (!sc.parts.some((p) => p.kind === 'capacitor' && !p.burn)) {
+    if (!usesTime(sc)) {
       engine = null;
       return simulate(sc);
     }
@@ -52,7 +66,20 @@ function play(id: string) {
     const blown = fuseOverload(meter, sim);
     if (blown !== null) meter = { ...meter, fuseBlownAt: blown };
     const sim2 = blown !== null ? live() : sim;
-    return { c, sim: sim2, t: topology(c), meter, reading: meter.open ? readMeter(c, meter, sim2) : null };
+    const time = (engine as TransientSim | null)?.time ?? 0;
+    recorder.record(time, sim2);
+    return {
+      c,
+      sim: sim2,
+      t: topology(c),
+      meter,
+      reading: meter.open ? readMeter(c, meter, sim2) : null,
+      time,
+      scope: scopeView({ ...INITIAL_SCOPE, open: scope.open }, scope.open ? scope.pins : [null, null], trace, time),
+      recent: recorder,
+      sound,
+      levels,
+    };
   };
   const tick = () => {
     done = advance(lesson, done, ctx());
@@ -105,13 +132,33 @@ function play(id: string) {
         ...(black ? { black: { pin: { part: black[0].id, pin: black[1] } } } : {}),
       };
     },
-    /** Lets circuit time pass (the app's clock running), ticking steps as it goes, like the app does every frame. */
+    /**
+     * Lets circuit time pass (the app's clock running), ticking steps as it goes, like the app
+     * does every frame; the scope samples every step (as small as the app's, 1/16000 s with a speaker).
+     */
     wait(seconds: number) {
       live();
-      const steps = Math.round(seconds / BASE_STEP);
+      const h = c.parts.some((p) => p.kind === 'speaker' && !p.burn) ? 1 / AUDIO_RATE : BASE_STEP;
+      const steps = Math.round(seconds / h);
+      const perTick = Math.max(1, Math.round(0.02 / h));
       for (let k = 0; k < steps && engine; k++) {
-        engine.step(BASE_STEP);
-        if (k % 50 === 0) tick();
+        const e = engine as TransientSim;
+        e.step(h);
+        if (scope.open) {
+          const [a, b] = scope.pins;
+          trace.push(e.time, a ? (e.voltageAt(a) ?? NaN) : NaN, b ? (e.voltageAt(b) ?? NaN) : NaN);
+        }
+        for (const s of c.parts) {
+          if (s.kind !== 'speaker' || s.burn) continue;
+          const i = ((e.voltageAt({ part: s.id, pin: 0 }) ?? 0) - (e.voltageAt({ part: s.id, pin: 1 }) ?? 0)) / SPEAKER.r;
+          const x = acc.get(s.id) ?? { sum: 0, sq: 0, n: 0 };
+          acc.set(s.id, { sum: x.sum + i, sq: x.sq + i * i, n: x.n + 1 });
+        }
+        if (k % perTick === 0) {
+          levels = new Map([...acc].map(([id, x]) => [id, Math.sqrt(Math.max(0, x.sq / x.n - (x.sum / x.n) ** 2))]));
+          acc.clear();
+          tick();
+        }
       }
       return tick();
     },
@@ -119,6 +166,17 @@ function play(id: string) {
     restart() {
       engine = null;
       engineFor = null;
+      trace.clear();
+    },
+    /** Opens the scope with its probes on these pins. */
+    probe(ch1?: [Part, number], ch2?: [Part, number]) {
+      const pin = (x?: [Part, number]): PinRef | null => (x ? { part: x[0].id, pin: x[1] } : null);
+      scope = { open: true, pins: [pin(ch1), pin(ch2)] };
+      trace.clear();
+    },
+    /** Switches sound on or off. */
+    sound(on: boolean) {
+      sound = on;
     },
     replaceFuse() {
       meter = { ...meter, fuseBlownAt: null };
@@ -555,6 +613,256 @@ describe('lessons', () => {
     expect(isComplete(p.lesson, p.tick())).toBe(true);
   });
 
+  /* ---------- Sound & Timing ---------- */
+
+  it('Watching time: the oscilloscope', () => {
+    const p = play('scope-intro');
+    const cap = p.find('capacitor');
+    const pb = p.find('pushbutton');
+    p.probe();
+    p.expectDone(['open']);
+    p.probe([cap, 0]);
+    p.expectDone(['open', 'probe']);
+    p.set(pb, { on: true });
+    p.wait(3);
+    p.expectDone(['open', 'probe', 'charge']);
+    p.set(pb, { on: false });
+    p.wait(1);
+    p.expectDone(['open', 'probe', 'charge', 'drain']);
+    p.set(p.ref('R2'), { value: 10_000 });
+    p.wait(4);
+    p.expectDone(['open', 'probe', 'charge', 'drain', 'drain-fast']);
+    p.set(cap, { value: 10e-6 });
+    p.set(pb, { on: true });
+    p.wait(0.6);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('Oscillators: a two-transistor blinker', () => {
+    const p = play('blinker');
+    const q1 = p.ref('Q1');
+    p.probe([q1, 1]);
+    p.wait(4.5);
+    p.expectDone(['probe', 'auto']);
+    p.probe([q1, 1], [q1, 0]);
+    p.wait(4.5);
+    p.expectDone(['probe', 'auto', 'base']);
+    p.set(p.ref('C1'), { value: 4.7e-6 });
+    p.set(p.ref('C2'), { value: 4.7e-6 });
+    p.wait(4.5);
+    p.expectDone(['probe', 'auto', 'base', 'faster']);
+    p.set(p.ref('C1'), { value: 22e-6 });
+    p.wait(4.5);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('From blink to beep', () => {
+    const p = play('beeper');
+    p.sound(true);
+    p.expectDone(['sound']);
+    p.set(p.ref('C1'), { value: 10e-9 });
+    p.set(p.ref('C2'), { value: 10e-9 });
+    p.wait(0.1);
+    p.expectDone(['sound', 'tone']);
+    p.probe([p.ref('Q2'), 1]);
+    p.wait(0.1);
+    p.expectDone(['sound', 'tone', 'measure']);
+    p.set(p.ref('R2'), { value: 100_000 });
+    p.set(p.ref('R3'), { value: 100_000 });
+    p.probe([p.ref('Q2'), 1]);
+    p.wait(0.1);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('The 555 timer: a one-shot, with the design challenge', () => {
+    const p = play('555-oneshot');
+    const pb = p.find('pushbutton');
+    p.wait(0.1);
+    p.set(pb, { on: true });
+    p.wait(0.1);
+    p.expectDone(['press']);
+    p.set(pb, { on: false });
+    p.wait(0.2);
+    p.expectDone(['press', 'hold']);
+    p.wait(1.2);
+    p.expectDone(['press', 'hold', 'off']);
+    p.probe([p.find('capacitor'), 0], [p.find('timer555'), 2]);
+    p.set(pb, { on: true });
+    p.wait(0.1);
+    p.set(pb, { on: false });
+    p.wait(1.5);
+    p.expectDone(['press', 'hold', 'off', 'scope']);
+    p.set(p.find('capacitor'), { value: 47e-6 });
+    p.set(pb, { on: true });
+    p.wait(0.1);
+    p.set(pb, { on: false });
+    p.wait(0.5);
+    p.expectDone(['press', 'hold', 'off', 'scope', 'longer']);
+    p.wait(6); // let the 5 s pulse end
+    p.set(p.find('capacitor'), { value: 100e-6 });
+    p.set(pb, { on: true });
+    p.wait(0.1);
+    p.set(pb, { on: false });
+    p.wait(0.5);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('The 555 timer: a blinker', () => {
+    const p = play('555-astable');
+    const u = p.find('timer555');
+    const r3 = p.ref('R3');
+    const cap = p.find('capacitor');
+    const gnd = p.find('ground');
+    p.wire(r3, 0, u, 6);
+    p.wire(r3, 1, u, 5);
+    p.expectDone(['r3']);
+    p.wire(u, 5, u, 1);
+    p.expectDone(['r3', 'trig']);
+    p.wire(cap, 0, u, 5);
+    p.wire(cap, 1, gnd, 0);
+    p.wait(2);
+    p.expectDone(['r3', 'trig', 'cap', 'blink']);
+    p.probe([cap, 0], [u, 2]);
+    p.wait(4.5);
+    p.expectDone(['r3', 'trig', 'cap', 'blink', 'saw']);
+    p.set(p.ref('R2'), { value: 47_000 });
+    p.set(r3, { value: 4700 });
+    p.wait(4.5);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('The 555 timer: making tones, tuned to A', () => {
+    const p = play('555-tone');
+    const u = p.find('timer555');
+    const cap = p.find('capacitor');
+    p.sound(true);
+    p.expectDone(['sound']);
+    p.set(cap, { value: 68e-9 });
+    p.wait(0.1);
+    p.expectDone(['sound', 'tone']);
+    p.probe([u, 2]);
+    p.wait(0.1);
+    p.expectDone(['sound', 'tone', 'measure']);
+    p.set(cap, { value: 33e-9 });
+    p.probe([u, 2]);
+    p.wait(0.1);
+    p.expectDone(['sound', 'tone', 'measure', 'octave']);
+    p.set(cap, { value: 150e-9 });
+    p.probe([u, 2]);
+    p.wait(0.1);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('Sound effects: a light theremin', () => {
+    const p = play('theremin');
+    const u = p.find('timer555');
+    const ldr = p.find('ldr');
+    p.sound(true);
+    p.wait(0.05);
+    p.expectDone(['sound']);
+    p.probe([u, 2]);
+    p.wait(0.05);
+    p.expectDone(['sound', 'probe']);
+    p.set(ldr, { light: 0.1 });
+    p.probe([u, 2]);
+    p.wait(0.3);
+    p.expectDone(['sound', 'probe', 'dark']);
+    p.set(ldr, { light: 0.9 });
+    p.probe([u, 2]);
+    p.wait(0.05);
+    p.expectDone(['sound', 'probe', 'dark', 'bright']);
+    p.set(p.ref('R3'), { value: 47_000 });
+    p.wait(0.05);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('AC: signals that swing', () => {
+    const p = play('ac-signals');
+    const src = p.find('acsource');
+    const r = p.ref('R1');
+    p.probe([src, 0]);
+    p.wait(0.2);
+    p.expectDone(['probe', 'auto']);
+    p.set(src, { freq: 1 });
+    p.expectDone(['probe', 'auto', 'slow']);
+    p.unwire(r, 1, src, 1);
+    const led = p.add('led');
+    p.wire(r, 1, led, 0);
+    p.wire(led, 1, src, 1);
+    p.wait(1.5);
+    p.expectDone(['probe', 'auto', 'slow', 'led']);
+    p.set(src, { wave: 'square' });
+    p.expectDone(['probe', 'auto', 'slow', 'led', 'square']);
+    p.unwire(led, 1, src, 1);
+    const spk = p.add('speaker');
+    p.wire(led, 1, spk, 0);
+    p.wire(spk, 1, src, 1);
+    p.set(src, { freq: 440 });
+    p.sound(true);
+    p.wait(0.05);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('Rectifiers: AC to DC', () => {
+    const p = play('rectifiers');
+    const src = p.find('acsource');
+    const r = p.ref('R1');
+    p.probe([r, 0]);
+    p.wait(0.2);
+    p.expectDone(['half']);
+    p.remove(p.find('diode'));
+    p.unwire(r, 1, src, 1);
+    const br = p.add('bridge');
+    const gnd = p.add('ground');
+    p.wire(src, 0, br, 0);
+    p.wire(src, 1, br, 1);
+    p.wire(br, 2, r, 0);
+    p.wire(br, 3, r, 1);
+    p.wire(br, 3, gnd, 0);
+    p.probe([r, 0]);
+    p.wait(0.2);
+    p.expectDone(['half', 'bridge']);
+    const cap = p.add('capacitor', 100e-6);
+    p.wire(cap, 0, br, 2);
+    p.wire(cap, 1, br, 3);
+    p.wait(4.5);
+    p.expectDone(['half', 'bridge', 'smooth']);
+    p.set(cap, { value: 1000e-6 });
+    p.wait(4.5);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
+  it('Project: a DC power supply', () => {
+    const p = play('power-supply');
+    const [src, t, br] = [p.find('acsource'), p.find('transformer'), p.find('bridge')];
+    const r1 = p.ref('R1');
+    p.wire(src, 0, t, 0);
+    p.wire(src, 1, t, 1);
+    p.expectDone(['primary']);
+    p.wire(t, 2, br, 0);
+    p.wire(t, 3, br, 1);
+    p.expectDone(['primary', 'secondary']);
+    p.wait(0.5);
+    p.meter('V', [r1, 0], [r1, 1]);
+    p.wait(0.1);
+    p.expectDone(['primary', 'secondary', 'dc']);
+    p.closeMeter();
+    const r2 = p.ref('R2');
+    const led = p.find('led');
+    p.wire(r2, 0, br, 2);
+    p.wire(r2, 1, led, 0);
+    p.wire(led, 1, p.find('ground'), 0);
+    p.wait(0.1);
+    p.expectDone(['primary', 'secondary', 'dc', 'led']);
+    p.set(t, { value: 0.25 });
+    p.wait(1);
+    p.expectDone(['primary', 'secondary', 'dc', 'led', 'ratio']);
+    p.probe([r1, 0]);
+    p.remove(p.find('capacitor'));
+    p.wait(0.2);
+    expect(isComplete(p.lesson, p.tick())).toBe(true);
+  });
+
   it('each track has ten lessons, in a sensible order', () => {
     expect(LESSONS.filter((l) => l.track === 'foundations').map((l) => l.id)).toEqual([
       'first-led',
@@ -569,5 +877,6 @@ describe('lessons', () => {
       'switches',
     ]);
     expect(LESSONS.filter((l) => l.track === 'components')).toHaveLength(10);
+    expect(LESSONS.filter((l) => l.track === 'timing')).toHaveLength(10);
   });
 });

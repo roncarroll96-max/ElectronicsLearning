@@ -1,10 +1,12 @@
 import type { Circuit } from '../../model/circuit';
+import type { ScopeView } from '../../scope/scope';
 import type { PartKind } from '../../model/parts';
 import type { MeterReading, MeterState } from '../../meter/meter';
 import type { SimResult } from '../../sim/simulate';
 import type { Topology } from '../topology';
+import type { Recent } from './recorder';
 
-export type TrackId = 'foundations' | 'components';
+export type TrackId = 'foundations' | 'components' | 'timing';
 
 /** Everything a step's check can look at. */
 export interface CheckCtx {
@@ -14,6 +16,15 @@ export interface CheckCtx {
   t: Topology;
   meter: MeterState;
   reading: MeterReading | null;
+  /** Circuit time, s (0 for circuits that don't change over time). */
+  time: number;
+  scope: ScopeView;
+  /** How each part's readings moved over the last few seconds. */
+  recent: Recent;
+  /** Sound is switched on. */
+  sound: boolean;
+  /** How loudly each speaker is being driven: the changing part of its current, rms, A (by part id). */
+  levels: ReadonlyMap<string, number>;
 }
 
 export interface Step {
