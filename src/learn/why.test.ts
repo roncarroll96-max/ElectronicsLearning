@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { E12, isStandard, parseValue, seriesValues, standardDown, standardUp } from '../model/values';
 import { bench } from '../test/bench';
-import { whyThisValue } from './why';
+import type { Circuit } from '../model/circuit';
+import { simulate } from '../sim/simulate';
+import { TransientSim } from '../sim/transient';
+import { LESSONS } from './lessons';
+import { blinkerHalf, timing555, whyThisValue } from './why';
 
 describe('standard values', () => {
   it('lists every E12 resistor from 10 Ω to 1 MΩ', () => {
@@ -92,5 +96,56 @@ describe('roles', () => {
       expect(why.goal.length, p.kind).toBeGreaterThan(10);
       expect(why.reasoning.length, p.kind).toBeGreaterThan(10);
     }
+  });
+});
+
+describe('timing predictions match the simulator (spec check 3)', () => {
+  /** Average period between rising edges of a part's pin-to-pin voltage. */
+  function measuredPeriod(c: Circuit, id: string, a: number, b: number, skip: number, seconds: number, h: number): number {
+    const sim = new TransientSim(c);
+    const v = () => {
+      const r = sim.result().parts.get(id)!;
+      return r.v[a] - r.v[b];
+    };
+    for (let t = 0; t < skip; t += h) sim.step(h);
+    const edges: number[] = [];
+    let was = v() > 4;
+    for (let t = 0; t < seconds; t += h) {
+      sim.step(h);
+      const high = v() > 4;
+      if (high && !was) edges.push(sim.time);
+      was = high;
+    }
+    expect(edges.length).toBeGreaterThan(2);
+    return (edges[edges.length - 1] - edges[0]) / (edges.length - 1);
+  }
+  const lesson = (id: string) => LESSONS.find((l) => l.id === id)!.starter!();
+
+  it('a two-transistor blinker: each capacitor times 0.69 × R × C, and the scope agrees', () => {
+    for (const cap of [10e-6, 4.7e-6]) {
+      const c = lesson('blinker');
+      for (const p of c.parts) if (p.kind === 'capacitor') p.value = cap;
+      const c1 = c.parts.find((p) => p.ref === 'C1')!;
+      const bl = blinkerHalf(c1, c)!;
+      expect(bl).not.toBeNull();
+      const q1 = c.parts.find((p) => p.ref === 'Q1')!;
+      const T = measuredPeriod(c, q1.id, 1, 2, 2, 4, 2e-4);
+      expect(T / (2 * bl.half)).toBeGreaterThan(0.85);
+      expect(T / (2 * bl.half)).toBeLessThan(1.02);
+      expect(whyThisValue(c1, c, simulate(c)).math.join(' ')).toMatch(/Half cycle/);
+    }
+  });
+
+  it('a 555 astable: the worked frequency matches the simulated one', () => {
+    const c = lesson('555-tone');
+    const u = c.parts.find((p) => p.kind === 'timer555')!;
+    c.parts.find((p) => p.kind === 'capacitor')!.value = 68e-9; // the lesson's first step
+    const tm = timing555(u, c)!;
+    expect(tm).not.toBeNull();
+    const f = Number(/f = .* = ([\d.]+) (k?)Hz/.exec(tm.math[2])!.slice(1, 2)[0]) * (/kHz/.test(tm.math[2]) ? 1000 : 1);
+    const gnd = 0;
+    const T = measuredPeriod(c, u.id, 2, gnd, 0.01, 0.05, 1 / 16000);
+    expect(1 / T / f).toBeGreaterThan(0.95);
+    expect(1 / T / f).toBeLessThan(1.05);
   });
 });

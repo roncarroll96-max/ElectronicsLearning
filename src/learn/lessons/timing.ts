@@ -229,7 +229,7 @@ export const TIMING: Lesson[] = [
     concept: [
       'An oscillator is a circuit that never settles: it keeps switching back and forth by itself. This one, the astable multivibrator, is two transistor switches that keep turning each other off.',
       'When Q1 switches on, its collector drops to almost 0 V. That sudden drop passes through C1 and pulls Q2’s base far below 0 V, so Q2 turns off. Q2 stays off until C1 recharges through its base resistor, then turns on and does the same to Q1. Round and round.',
-      'Each half of the cycle lasts about 0.69 × R × C (the base resistor and the capacitor), so a whole blink takes about 1.4 × R × C: with 47 kΩ and 10 µF, about 0.65 s, or 1.5 blinks a second.',
+      'Each half of the cycle lasts about 0.69 × R × C (the base resistor and the capacitor), so a whole blink takes about 1.4 × R × C: with 47 kΩ and 10 µF, about 0.65 s. A real one runs a little quicker (the base can only be pulled about 7 V below 0 V, so it has less to climb back): about 0.6 s, or 1.7 blinks a second.',
     ],
     starter: blinker(10e-6, 'led'),
     build: [
@@ -240,7 +240,7 @@ export const TIMING: Lesson[] = [
       },
       {
         id: 'auto',
-        text: 'Press Auto. The trace jumps between almost 0 V (Q1 on, its LED lit) and about 7 V (Q1 off). The scope reads the frequency: about 1.5 Hz.',
+        text: 'Press Auto. The trace jumps between almost 0 V (Q1 on, its LED lit) and about 7 V (Q1 off). The scope reads the frequency: about 1.7 Hz.',
         check: (c) => between(scopeFreq(c, byRef(c, 'Q1'), 1) ?? 0, 1, 2.2),
       },
       {

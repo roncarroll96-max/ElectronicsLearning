@@ -128,7 +128,7 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         math: ['Peak DC out ≈ AC peak − 2 × 0.7 V (two diodes conduct at a time)', 'Ripple ≈ I_load ÷ (2 × f × C) for full-wave'],
       };
     case 'timer555':
-      return timer555(ctx);
+      return timer555(part, ctx);
     case 'ground':
       return {
         role: '0 V reference',
@@ -138,6 +138,86 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         math: [],
       };
   }
+}
+
+/* ---------- Timing predictions ---------- */
+
+const RESISTIVE = ['resistor', 'ldr', 'potentiometer'] as const;
+
+function ohms(p: Part): number {
+  return p.kind === 'ldr' ? ldrResistance(p.light ?? 0.5) : (p.value ?? 0);
+}
+
+/** A resistor-like part with one pin on net a and the other on net b. */
+function resistorBetween(t: Topology, c: Circuit, a: PinAt, b: PinAt): Part | null {
+  for (const p of c.parts) {
+    if (!(RESISTIVE as readonly string[]).includes(p.kind)) continue;
+    const pa = { part: p.id, pin: 0 };
+    const pb = { part: p.id, pin: 1 };
+    const ra = { part: a.part.id, pin: a.pin };
+    const rb = { part: b.part.id, pin: b.pin };
+    if ((t.joined(pa, ra) && t.joined(pb, rb)) || (t.joined(pa, rb) && t.joined(pb, ra))) return p;
+  }
+  return null;
+}
+
+export interface Timing {
+  /** The lines for "Show the math", with the learner's own values. */
+  math: string[];
+  /** One plain sentence with the prediction. */
+  summary: string;
+}
+
+/** How a 555 is wired (astable or one-shot), and the timing its parts predict. */
+export function timing555(u: Part, c: Circuit, t: Topology = topology(c)): Timing | null {
+  const pin = (n: number): PinAt => ({ part: u, pin: n });
+  const cap = c.parts.find((p) => p.kind === 'capacitor' && [0, 1].some((i) => t.joined({ part: p.id, pin: i }, { part: u.id, pin: 5 })));
+  if (!cap) return null;
+  const C = cap.value ?? 10e-6;
+  const thrDis = t.joined({ part: u.id, pin: 5 }, { part: u.id, pin: 6 });
+  if (thrDis) {
+    const r = resistorBetween(t, c, pin(7), pin(5));
+    if (!r) return null;
+    const T = 1.1 * ohms(r) * C;
+    return {
+      summary: `Wired as a one-shot: each trigger gives a pulse of about ${time(T)}.`,
+      math: [`Pulse = 1.1 × ${r.ref} × ${cap.ref} = 1.1 × ${R(ohms(r))} × ${F(C)} = ${time(T)}`],
+    };
+  }
+  const ra = resistorBetween(t, c, pin(7), pin(6));
+  const rb = resistorBetween(t, c, pin(6), pin(5));
+  if (!ra || !rb || !t.joined({ part: u.id, pin: 5 }, { part: u.id, pin: 1 })) return null;
+  const a = ohms(ra);
+  const b = ohms(rb);
+  const hi = 0.693 * (a + b) * C;
+  const lo = 0.693 * b * C;
+  const f = 1 / (hi + lo);
+  return {
+    summary: `Wired as an astable: it should run at about ${formatFreq(f)} (high ${time(hi)}, low ${time(lo)}). Probe the output and compare with the scope’s reading.`,
+    math: [
+      `High time = 0.693 × (${ra.ref} + ${rb.ref}) × ${cap.ref} = 0.693 × ${R(a + b)} × ${F(C)} = ${time(hi)}`,
+      `Low time = 0.693 × ${rb.ref} × ${cap.ref} = 0.693 × ${R(b)} × ${F(C)} = ${time(lo)}`,
+      `f = 1 ÷ (high + low) = 1.44 ÷ ((${ra.ref} + 2·${rb.ref}) × ${cap.ref}) = ${formatFreq(f)}`,
+    ],
+  };
+}
+
+/**
+ * A capacitor in a two-transistor blinker: one pin on a transistor's base.
+ * Its half of the cycle lasts about 0.69 × R × C, R being that base's resistor.
+ */
+export function blinkerHalf(cap: Part, c: Circuit, t: Topology = topology(c)): { r: Part; half: number } | null {
+  for (const i of [0, 1]) {
+    const net = t.net({ part: cap.id, pin: i });
+    const base = net.find((x) => x.part.kind === 'npn' && x.pin === 0);
+    if (!base) continue;
+    const other = t.net({ part: cap.id, pin: 1 - i });
+    if (!other.some((x) => x.part.kind === 'npn' && x.pin === 1)) continue;
+    const r = net.find((x) => (RESISTIVE as readonly string[]).includes(x.part.kind) && x.part.id !== cap.id);
+    if (!r) continue;
+    return { r: r.part, half: Math.LN2 * ohms(r.part) * (cap.value ?? 10e-6) };
+  }
+  return null;
 }
 
 /* ---------- AC, coils and the 555 ---------- */
@@ -193,8 +273,9 @@ function transformer(part: Part, ctx: Ctx): Why {
   };
 }
 
-function timer555(ctx: Ctx): Why {
+function timer555(part: Part, ctx: Ctx): Why {
   const r = ctx.r;
+  const tm = timing555(part, ctx.c, ctx.t);
   const vcc = r ? r.v[7] - r.v[0] : ctx.supply;
   const high = r ? r.v[2] - r.v[0] > vcc / 2 : false;
   return {
@@ -203,8 +284,8 @@ function timer555(ctx: Ctx): Why {
     reasoning:
       'Inside are a voltage divider, two comparators and a memory (a flip-flop). When the Trigger pin drops below ⅓ of the supply, the output switches high; when the Threshold pin rises above ⅔, the output switches low and the Discharge pin connects to ground. A capacitor charging and discharging between ⅓ and ⅔ of the supply therefore sets the timing, and resistors set how fast it charges. Reset held low stops everything.',
     choice: 'Astable: R1 from VCC to Discharge, R2 from Discharge to Threshold (tied to Trigger), C to ground. It runs at about 1.44 ÷ ((R1 + 2 R2) × C).',
-    yours: r ? `Its output is ${high ? 'high' : 'low'} (${V(r.v[2] - r.v[0])}), running from ${V(vcc)}.` : undefined,
-    math: ['Astable frequency f = 1.44 ÷ ((R1 + 2·R2) × C)', 'High time = 0.693 × (R1 + R2) × C, low time = 0.693 × R2 × C', 'Monostable pulse = 1.1 × R × C'],
+    yours: [r ? `Its output is ${high ? 'high' : 'low'} (${V(r.v[2] - r.v[0])}), running from ${V(vcc)}.` : '', tm?.summary ?? ''].filter(Boolean).join(' ') || undefined,
+    math: tm?.math ?? ['Astable frequency f = 1.44 ÷ ((R1 + 2·R2) × C)', 'High time = 0.693 × (R1 + R2) × C, low time = 0.693 × R2 × C', 'Monostable pulse = 1.1 × R × C'],
   };
 }
 
@@ -409,7 +490,20 @@ function capacitor(part: Part, ctx: Ctx): Why {
   const vs = ctx.supply;
   const math: string[] = [];
   let choice: string;
-  if (rn && Rv > 0) {
+  const u = ctx.c.parts.find((p) => p.kind === 'timer555' && [0, 1].some((i) => ctx.t.joined({ part: part.id, pin: i }, { part: p.id, pin: 5 })));
+  const tm = u ? timing555(u, ctx.c, ctx.t) : null;
+  const bl = tm ? null : blinkerHalf(part, ctx.c, ctx.t);
+  if (tm) {
+    choice = `It sets the timing of ${u!.ref}. ${tm.summary} A bigger capacitor makes everything proportionally slower.`;
+    math.push(...tm.math);
+  } else if (bl) {
+    const period = 2 * bl.half;
+    choice = `It times one half of the blink: after its transistor’s partner switches on, it holds this side’s base below 0 V until it recharges through ${bl.r.ref} (${R(ohms(bl.r))}), about 0.69 × R × C = ${time(bl.half)} (real blinkers run up to about 10% quicker, because the base can only be pulled about 7 V below 0 V). With both halves alike, one blink takes about ${time(period)} (${formatFreq(1 / period)}). Double the capacitor and that half takes twice as long. Probe a collector and compare with the scope’s reading.`;
+    math.push(
+      `Half cycle ≈ ln 2 × ${bl.r.ref} × ${part.ref} = 0.693 × ${R(ohms(bl.r))} × ${F(C)} = ${time(bl.half)}`,
+      `If the other half matches: period ≈ ${time(period)}, f ≈ ${formatFreq(1 / period)}`,
+    );
+  } else if (rn && Rv > 0) {
     choice = `With ${rn.part.ref} (${R(Rv)}) feeding it, τ = R × C = ${time(tau)}: the time to charge to about 63%, and about 5τ = ${time(5 * tau)} to be practically full. Half the capacitance would charge twice as fast; double, twice as slow. So designers decide the time they need, then pick C = τ ÷ R. Electrolytics are only accurate to ±20%, so timing like this is approximate.`;
     math.push(
       `τ = R × C = ${R(Rv)} × ${F(C)} = ${time(tau)}`,
