@@ -7,7 +7,7 @@
  * - A separate piece of circuit with no ground symbol uses its battery's −
  *   terminal as 0 V (or any node, if it has no battery).
  */
-import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS, UNO } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS, SEG, logicPins, UNO } from '../model/parts';
 import { pinKey, type Circuit, type Part } from '../model/circuit';
 import * as M from './models';
 import { criticalVoltage, type Device } from './devices';
@@ -249,6 +249,32 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         }
         break;
       }
+      case 'and':
+      case 'or':
+      case 'not':
+      case 'nand':
+      case 'nor':
+      case 'xor':
+      case 'dff': {
+        const L = M.LOGIC;
+        const lp = logicPins(part.kind);
+        // Its hidden 5 V supply, between its 5V and GND pins; its GND is a 0 V reference.
+        hasSource = true;
+        batteryMinus.push(local[lp.gnd]);
+        devices.push({ type: 'source', lt: [lp.v5, lp.gnd], t: [], v: L.vcc, g: 1 / L.supplyR });
+        for (const i of lp.inputs) resistor(i, lp.gnd, L.pullDown);
+        // Each output: switched to 5 V or to GND by its logic (transient.ts). Starts low.
+        for (const o of lp.outputs) {
+          devices.push({ type: 'gi', role: 'logic-high', pin: o, lt: [lp.v5, o], t: [], geq: 0, ieq: 0 });
+          devices.push({ type: 'gi', role: 'logic-low', pin: o, lt: [o, lp.gnd], t: [], geq: 1 / L.outR, ieq: 0 });
+        }
+        break;
+      }
+      case 'sevenseg':
+        // Eight LEDs (segments a–g and the dot) sharing one cathode.
+        resistor(SEG.com2, SEG.com, M.MIN_R);
+        for (let k = 0; k < SEG.count; k++) diode(k, SEG.com, M.LED_RED);
+        break;
       case 'ground':
         break;
     }

@@ -4,7 +4,8 @@
  * local coordinates unless noted, and never catching the pointer.
  */
 import type { Part } from '../model/circuit';
-import { UNO } from '../model/parts';
+import { PART_DEFS, SEG, UNO, isLogic, logicPins } from '../model/parts';
+import { SEG_SHAPES } from './LogicBodies';
 import { LAMP } from '../sim/models';
 import type { PartReading } from '../sim/simulate';
 import type { View } from '../components/TopBar';
@@ -16,18 +17,26 @@ export interface PartLive {
   sound: boolean;
   /** Running above its rating. */
   hot: boolean;
+  /** A 7-segment display: each segment's brightness (a–g, dp). */
+  segs?: number[];
+  /** A logic chip: which of its output pins are HIGH. */
+  highs?: number[];
 }
+
+/** Brightness of an LED carrying current i (amps). */
+const ledGlow = (i: number) => (i > 1e-5 ? Math.min(1, Math.sqrt(i / 0.02)) : 0);
 
 /** How brightly a part shines for a given reading. */
 export function liveOf(part: Part, r: PartReading | undefined, hot: boolean): PartLive {
   let glow = 0;
   let sound = false;
+  let segs: number[] | undefined;
+  let highs: number[] | undefined;
   if (r && !part.burn) {
     if (part.kind === 'led') {
       // Light output is roughly proportional to current, but our eyes compress it:
       // 1 mA already looks clearly lit, 20 mA is full brightness.
-      const i = r.i[0];
-      glow = i > 1e-5 ? Math.min(1, Math.sqrt(i / 0.02)) : 0;
+      glow = ledGlow(r.i[0]);
     } else if (part.kind === 'lamp') {
       // A filament barely glows (dull orange) until it gets near its rated power.
       const p = Math.max(0, r.power) / (LAMP.v * LAMP.i);
@@ -38,9 +47,14 @@ export function liveOf(part: Part, r: PartReading | undefined, hot: boolean): Pa
     } else if (part.kind === 'arduino') {
       // The board's L light follows pin 13 (through a buffer, so it doesn't load the pin).
       glow = r.v[13] - r.v[UNO.gnd] > 2.5 ? 1 : 0;
+    } else if (part.kind === 'sevenseg') {
+      segs = Array.from({ length: SEG.count }, (_, k) => ledGlow(r.i[k]));
+    } else if (isLogic(part.kind)) {
+      const lp = logicPins(part.kind);
+      highs = lp.outputs.filter((o) => r.v[o] - r.v[lp.gnd] > 2.5);
     }
   }
-  return { glow, sound, hot };
+  return { glow, sound, hot, segs, highs };
 }
 
 /** Gradients shared by every glow. */
@@ -76,6 +90,39 @@ export function PartGlow({ part, view, live }: { part: Part; view: View; live: P
         ) : (
           <path d="M-10 -10L10 0L-10 10Z" fill="#ff5b5b" opacity={g} />
         )}
+      </g>
+    );
+  }
+  if (live.segs?.some((x) => x > 0)) {
+    return (
+      <g className="live-fx" transform="skewX(-6)">
+        {SEG_SHAPES.map((sh, k) => {
+          const b = live.segs![k];
+          if (b <= 0) return null;
+          const cx = sh.x + sh.w / 2;
+          const cy = sh.y + sh.h / 2;
+          return (
+            <g key={k}>
+              <ellipse cx={cx} cy={cy} rx={sh.w / 2 + 8} ry={sh.h / 2 + 8} fill="url(#glow-led)" opacity={0.5 * b} />
+              {sh.dot ? (
+                <circle cx={cx} cy={cy} r={sh.w / 2} fill="#ff4a4a" opacity={0.4 + 0.6 * b} />
+              ) : (
+                <rect x={sh.x} y={sh.y} width={sh.w} height={sh.h} rx="3" fill="#ff4a4a" opacity={0.4 + 0.6 * b} />
+              )}
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+  if (live.highs?.length) {
+    // A HIGH output: a small green light beside its pin, to read the logic at a glance.
+    return (
+      <g className="live-fx">
+        {live.highs.map((pin) => {
+          const p = PART_DEFS[part.kind].pins[pin];
+          return <circle key={pin} cx={p.x - 9} cy={p.y - 6} r="3" fill="#5ee87a" />;
+        })}
       </g>
     );
   }

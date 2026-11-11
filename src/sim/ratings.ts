@@ -7,7 +7,7 @@
  * one and a half to two times their rating.
  */
 import type { BurnInfo, Circuit, Part } from '../model/circuit';
-import { UNO, type PartKind } from '../model/parts';
+import { SEG, UNO, isLogic, logicPins, type PartKind } from '../model/parts';
 import type { PartReading, SimResult } from './simulate';
 
 export type Quantity = BurnInfo['quantity'];
@@ -58,6 +58,16 @@ export const RATINGS: Partial<Record<PartKind, Limit[]>> = {
   ],
   // Arduino Uno (ATmega328P): 20 mA per pin recommended, 40 mA absolute maximum.
   arduino: [{ quantity: 'current', max: 0.02, burn: 0.04 }],
+  // 74HC logic chips: 20 mA per output recommended, 25 mA absolute maximum (destroyed well past it).
+  and: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  or: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  not: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  nand: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  nor: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  xor: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  dff: [{ quantity: 'current', max: 0.02, burn: 0.05 }],
+  // 7-segment display: each segment is an LED (20 mA typical, 30 mA absolute maximum), as the LED above.
+  sevenseg: [{ quantity: 'current', max: 0.03, burn: 0.06 }],
   // A battery doesn't burn out here, but more than 1 A from a 9 V battery means a short circuit.
   battery: [{ quantity: 'current', max: 1, burn: Infinity }],
 };
@@ -74,6 +84,9 @@ function measure(kind: PartKind, q: Quantity, r: PartReading): number {
     case 'current':
       // Arduino: the busiest input/output pin.
       if (kind === 'arduino') return Math.max(...r.i.slice(0, UNO.io).map(Math.abs));
+      // Logic chip: its busiest output. Display: its brightest segment.
+      if (isLogic(kind)) return Math.max(...logicPins(kind).outputs.map((o) => Math.abs(r.i[o])));
+      if (kind === 'sevenseg') return Math.max(...r.i.slice(0, SEG.count));
       // Transistor: its collector. Bridge: its + output. 555: its output pin.
       return Math.abs(kind === 'npn' ? r.i[1] : kind === 'bridge' ? r.i[2] : kind === 'timer555' ? r.i[2] : r.i[0]);
     case 'power':

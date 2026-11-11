@@ -148,6 +148,50 @@ function paths(kind: PartKind) {
           </text>
         </>
       );
+    case 'and':
+    case 'nand':
+      return (
+        <>
+          <path d="M11 4h8a8 8 0 0 1 0 16h-8z" />
+          <path d="M3 8h8M3 16h8M27 12h10" />
+          {kind === 'nand' && <circle cx="29.5" cy="12" r="2.2" fill="var(--surface, #000)" />}
+        </>
+      );
+    case 'or':
+    case 'nor':
+    case 'xor':
+      return (
+        <>
+          <path d="M10 4q10 0 17 8q-7 8-17 8q4-8 0-16z" />
+          {kind === 'xor' && <path d="M6.5 4q4 8 0 16" />}
+          <path d="M3 8h9M3 16h9M27 12h10" />
+          {kind === 'nor' && <circle cx="29.5" cy="12" r="2.2" fill="var(--surface, #000)" />}
+        </>
+      );
+    case 'not':
+      return (
+        <>
+          <path d="M11 5l14 7-14 7z" />
+          <circle cx="27.5" cy="12" r="2.2" />
+          <path d="M3 12h8M30 12h7" />
+        </>
+      );
+    case 'dff':
+      return (
+        <>
+          <rect x="10" y="3" width="20" height="18" rx="1.5" />
+          <path d="M4 8h6M4 16h6M30 8h6M30 16h6M10 13.5l3 2.5-3 2.5" />
+          <text x="15" y="10.5" fontSize="6" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">D</text>
+          <text x="25" y="10.5" fontSize="6" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">Q</text>
+        </>
+      );
+    case 'sevenseg':
+      return (
+        <>
+          <rect x="11" y="1.5" width="18" height="21" rx="1.5" />
+          <path d="M16 5.5h8M25 6.5v4.5M25 13v4.5M16 18.5h8M15 13v4.5M15 6.5v4.5M16 12h8" />
+        </>
+      );
     case 'arduino':
       return (
         <>

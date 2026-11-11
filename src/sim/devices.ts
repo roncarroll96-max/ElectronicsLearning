@@ -36,7 +36,7 @@ export type Device =
   /** An AC source: its internal conductance g, with the time stepper setting ieq = g·V(t) each step. */
   | (Base & { type: 'ac'; amp: number; freq: number; wave: Wave; g: number; geq: number; ieq: number })
   /** A switched element (the 555's output and discharge): conductance plus current, set when the chip flips. */
-  | (Base & { type: 'gi'; geq: number; ieq: number; role: 'high' | 'low' | 'discharge' | 'pin-high' | 'pin-low' | 'pin-pullup'; pin?: number })
+  | (Base & { type: 'gi'; geq: number; ieq: number; role: 'high' | 'low' | 'discharge' | 'pin-high' | 'pin-low' | 'pin-pullup' | 'logic-high' | 'logic-low'; pin?: number })
   /**
    * Two coupled windings (a transformer). Terminals: primary a, b, secondary a, b.
    * Winding currents (into each a) are i = G·v − ie, with v the two winding voltages.

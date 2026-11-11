@@ -4,6 +4,7 @@
  */
 import type { Part } from '../model/circuit';
 import { resistorBands, type Wave } from '../model/parts';
+import { FlipFlopSymbol, GateSymbol, LogicChip, SevenSegReal, SevenSegSymbol } from './LogicBodies';
 
 const ZIGZAG = 'M-40 0H-18l3-8 6 16 6-16 6 16 6-16 6 16 3-8H40';
 /** Four turns of wire, pins at ±40. */
@@ -217,6 +218,17 @@ export function SchematicBody({ part }: { part: Part }) {
           <UnoLabels real={false} />
         </>
       );
+    case 'and':
+    case 'or':
+    case 'not':
+    case 'nand':
+    case 'nor':
+    case 'xor':
+      return <GateSymbol kind={part.kind} />;
+    case 'dff':
+      return <FlipFlopSymbol />;
+    case 'sevenseg':
+      return <SevenSegSymbol />;
     case 'ground':
       return <path className="sym ground" d="M0 -20V0M-12 0H12M-7 6H7M-2 12H2" />;
   }
@@ -420,6 +432,16 @@ export function RealisticBody({ part }: { part: Part }) {
           <ChipPins real />
         </>
       );
+    case 'and':
+    case 'or':
+    case 'not':
+    case 'nand':
+    case 'nor':
+    case 'xor':
+    case 'dff':
+      return <LogicChip kind={part.kind} />;
+    case 'sevenseg':
+      return <SevenSegReal />;
     case 'arduino':
       return (
         <>

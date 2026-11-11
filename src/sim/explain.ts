@@ -153,6 +153,24 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
         fix: 'Put a resistor in series with whatever the pin drives (220 Ω for an LED), and switch anything that needs more current (a motor, a lamp, a buzzer) with a transistor.',
       };
     }
+    case 'and':
+    case 'or':
+    case 'not':
+    case 'nand':
+    case 'nor':
+    case 'xor':
+    case 'dff':
+      return {
+        headline,
+        why: `${A(b.value)} flowed through its output. A 74HC logic chip’s output is rated for 20 mA (25 mA absolute maximum); only about 25 Ω inside it limited the current, so an output wired straight to an LED, to GND, or to another output fighting it burns it out.`,
+        fix: 'Put a resistor in series with whatever the output drives (330 Ω for an LED), and never join two outputs together.',
+      };
+    case 'sevenseg':
+      return {
+        headline,
+        why: `${A(b.value)} flowed through one segment. Each segment is a small LED rated for about 20 mA, and nothing limited its current.`,
+        fix: 'Give each segment its own resistor (330 Ω from a 5 V signal gives about 9 mA).',
+      };
     default:
       return { headline, why: `It was pushed to ${fmt(b.value, b.quantity)}, past its limit.`, fix: 'Reduce the current through it.' };
   }

@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { updatePart, type Circuit, type Part, type Wire } from '../model/circuit';
-import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, UNO, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, SEG, UNO, logicPins, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
 import { explainBurn, explainHot } from '../sim/explain';
 import { ldrResistance } from '../sim/models';
 import { stressOf } from '../sim/ratings';
@@ -118,6 +118,42 @@ function rowsFor(part: Part, sim: SimResult): { rows: Row[]; note?: string } | n
         note: busiest > 0.02 ? 'A pin is supplying more than the 20 mA it’s rated for: add or raise its resistor.' : undefined,
       };
     }
+    case 'and':
+    case 'or':
+    case 'not':
+    case 'nand':
+    case 'nor':
+    case 'xor':
+    case 'dff': {
+      const lp = logicPins(part.kind);
+      const g = v[lp.gnd];
+      const names = PART_DEFS[part.kind].pins;
+      const level = (pin: number) => {
+        const x = v[pin] - g;
+        return `${x > 2.75 ? 'HIGH' : x < 2.25 ? 'LOW' : 'in between'} · ${formatReading(x, 'V')}`;
+      };
+      const busiest = Math.max(...lp.outputs.map((o) => Math.abs(i[o])));
+      return {
+        rows: [
+          ...lp.inputs.map((p): [string, string] => [names[p].name, level(p)]),
+          ...lp.outputs.map((p): [string, string] => [names[p].name, level(p)]),
+          ['Output current', formatReading(busiest, 'A')],
+        ],
+        note: busiest > 0.02 ? 'An output is supplying more than 20 mA (25 mA is its absolute maximum): add or raise its resistor.' : undefined,
+      };
+    }
+    case 'sevenseg': {
+      const lit = 'abcdefg'.split('').concat('dp').filter((_, k) => i[k] > 1e-4);
+      const most = Math.max(...i.slice(0, SEG.count));
+      return {
+        rows: [
+          ['Segments lit', lit.length ? lit.join(' ') : 'none'],
+          ['Brightest segment’s current', formatReading(Math.max(0, most), 'A')],
+          ['Total current', formatReading(Math.max(0, -(i[SEG.com] + i[SEG.com2])), 'A')],
+        ],
+        note: most > 0.02 ? 'A segment is carrying more than its 20 mA: each segment needs its own resistor.' : undefined,
+      };
+    }
     case 'timer555': {
       const g = v[P555.gnd];
       const vcc = v[P555.vcc] - g;
@@ -169,9 +205,9 @@ function SimState({ sim }: { sim: SimResult }) {
 }
 
 function referenceNote(circuit: Circuit) {
-  return circuit.parts.some((p) => p.kind === 'ground')
-    ? 'Voltages are measured from ground (0 V).'
-    : 'Voltages are measured from the battery’s − terminal (0 V).';
+  if (circuit.parts.some((p) => p.kind === 'ground')) return 'Voltages are measured from ground (0 V).';
+  if (circuit.parts.some((p) => p.kind === 'battery')) return 'Voltages are measured from the battery’s − terminal (0 V).';
+  return 'Voltages are measured from GND (0 V).';
 }
 
 export function PartReadings({ part, sim, circuit }: { part: Part; sim: SimResult; circuit: Circuit }) {

@@ -16,10 +16,10 @@
  * i ≈ C·(vₙ − vₙ₋₁) / h, which needs only one previous voltage.
  */
 import type { Circuit, PinRef } from '../model/circuit';
-import { P555, UNO } from '../model/parts';
+import { P555, UNO, isLogic, logicPins, type PartKind } from '../model/parts';
 import type { UnoCore } from '../arduino/uno';
 import { storedCharge, waveAt, type Device } from './devices';
-import { ARDUINO, JUNCTION_C, TIMER555, VT } from './models';
+import { ARDUINO, JUNCTION_C, LOGIC, TIMER555, VT } from './models';
 import { buildNetlist, type Netlist, type SimOptions } from './netlist';
 import { readout, type SimResult } from './simulate';
 import { solveAcross, solveFrom, type Solution } from './solver';
@@ -114,6 +114,38 @@ interface UnoEntry {
   pending: boolean;
 }
 
+/** A logic chip (gate or D flip-flop): its pins, its outputs' switches, and what it last saw and drove. */
+interface LogicEntry {
+  id: string;
+  kind: PartKind;
+  pins: number[];
+  lp: ReturnType<typeof logicPins>;
+  high: Extract<Device, { type: 'gi' }>[];
+  low: Extract<Device, { type: 'gi' }>[];
+  /** Each input's level as last read (HIGH or LOW, with hysteresis). */
+  inputs: boolean[];
+  /** Each output's level. */
+  out: boolean[];
+}
+
+/** A gate's output for inputs a and b (b is unused by NOT). */
+function gate(kind: PartKind, a: boolean, b: boolean): boolean {
+  switch (kind) {
+    case 'and':
+      return a && b;
+    case 'or':
+      return a || b;
+    case 'not':
+      return !a;
+    case 'nand':
+      return !(a && b);
+    case 'nor':
+      return !(a || b);
+    default:
+      return a !== b; // xor
+  }
+}
+
 /** A 555's comparator inputs, relative to its own GND pin. */
 interface TimerLevels {
   vcc: number;
@@ -171,6 +203,7 @@ export class TransientSim {
   private readonly xfmrs: XfmrEntry[] = [];
   private readonly sources: Extract<Device, { type: 'ac' }>[] = [];
   private readonly timers: TimerEntry[] = [];
+  private readonly logic: LogicEntry[] = [];
   /** Longest inner step an AC source allows: a fortieth of its period. */
   private hMax = Infinity;
   /** A step length the next attempt must use (to land on a 555's switching moment). */
@@ -210,6 +243,16 @@ export class TransientSim {
         const gi = (role: string) => pn.devices.find((d) => d.type === 'gi' && d.role === role) as Extract<Device, { type: 'gi' }>;
         const q = carry?.get(`${id}#Q`)?.v === 1 ? 1 : 0;
         this.timers.push({ id, pins: pn.pinNodes, high: gi('high'), low: gi('low'), discharge: gi('discharge'), q });
+      }
+      if (isLogic(pn.part.kind) && pn.devices.length) {
+        const kind = pn.part.kind;
+        const lp = logicPins(kind);
+        const gis = (role: string) => lp.outputs.map((o) => pn.devices.find((d) => d.type === 'gi' && d.role === role && d.pin === o) as Extract<Device, { type: 'gi' }>);
+        // Carried over an edit: what it drove and saw (a latch or flip-flop keeps its state).
+        const bits = carry?.get(`${id}#S`)?.v ?? -1;
+        const inputs = lp.inputs.map((_, k) => bits >= 0 && (bits & (1 << (8 + k))) !== 0);
+        const out = lp.outputs.map((_, k) => (bits >= 0 ? (bits & (1 << k)) !== 0 : kind === 'dff' ? k === 1 : false));
+        this.logic.push({ id, kind, pins: pn.pinNodes, lp, high: gis('logic-high'), low: gis('logic-low'), inputs, out });
       }
       const core = cores?.get(id);
       if (pn.part.kind === 'arduino' && pn.devices.length && core) {
@@ -252,6 +295,7 @@ export class TransientSim {
       }
     }
     for (const t of this.timers) this.applyTimer(t);
+    for (const l of this.logic) this.applyLogic(l);
     for (const u of this.unos) this.applyUno(u);
     // Before the first step: the circuit with every capacitor holding its voltage.
     this.sol = this.solveStep(Infinity, false);
@@ -269,7 +313,7 @@ export class TransientSim {
    * energy (a capacitor or a coil) or makes a signal, and it is powered or still holds energy.
    */
   get dynamic(): boolean {
-    const timed = this.caps.length + this.inductors.length + this.xfmrs.length + this.sources.length + this.timers.length + this.unos.length > 0;
+    const timed = this.caps.length + this.inductors.length + this.xfmrs.length + this.sources.length + this.timers.length + this.logic.length + this.unos.length > 0;
     return timed && (this.hasSource || !this.empty(1e-9));
   }
 
@@ -523,7 +567,9 @@ export class TransientSim {
    */
   private settleTimers(): boolean {
     let changed = false;
-    for (let pass = 0; pass < 4; pass++) {
+    // Enough passes for a signal to ripple through a chain of chips (each pass is one chip deep).
+    const passes = 4 + 2 * this.logic.length;
+    for (let pass = 0; pass < passes; pass++) {
       let any = false;
       for (const t of this.timers) {
         const q = nextQ(t.q, this.levels(t, this.sol.x));
@@ -532,12 +578,49 @@ export class TransientSim {
         this.applyTimer(t);
         any = true;
       }
+      for (const l of this.logic) if (this.updateLogic(l, this.sol.x)) any = true;
       if (!any) break;
       changed = true;
       const held = this.solveStep(Infinity, false);
       if (held.ok) this.sol = held;
     }
     return changed;
+  }
+
+  /**
+   * Reads a logic chip's inputs at node voltages x and works out its outputs.
+   * A D flip-flop copies D to Q on Clock's rising edge (D as it was just
+   * before the edge). Returns whether an output changed.
+   */
+  private updateLogic(l: LogicEntry, x: Float64Array): boolean {
+    const at = (pin: number) => {
+      const k = l.pins[pin];
+      return k < 0 ? 0 : x[k];
+    };
+    const g = at(l.lp.gnd);
+    const vcc = at(l.lp.v5) - g;
+    const was = l.inputs.slice();
+    l.lp.inputs.forEach((pin, k) => {
+      const v = at(pin) - g;
+      l.inputs[k] = l.inputs[k] ? v > LOGIC.fall * vcc : v > LOGIC.rise * vcc;
+    });
+    let out: boolean[];
+    if (l.kind === 'dff') {
+      const q = !was[1] && l.inputs[1] ? was[0] : l.out[0];
+      out = [q, !q];
+    } else out = [gate(l.kind, l.inputs[0], l.inputs[1] ?? false)];
+    if (out.every((o, k) => o === l.out[k])) return false;
+    l.out = out;
+    this.applyLogic(l);
+    return true;
+  }
+
+  /** Switches a logic chip's outputs to 5 V or GND. */
+  private applyLogic(l: LogicEntry): void {
+    l.out.forEach((on, k) => {
+      l.high[k].geq = on ? 1 / LOGIC.outR : 0;
+      l.low[k].geq = on ? 0 : 1 / LOGIC.outR;
+    });
   }
 
   /**
@@ -823,6 +906,12 @@ export class TransientSim {
       keep(`${x.id}#I2`, x.i[1]);
     }
     for (const t of this.timers) keep(`${t.id}#Q`, t.q);
+    for (const l of this.logic) {
+      let bits = 0;
+      l.out.forEach((o, k) => o && (bits |= 1 << k));
+      l.inputs.forEach((v, k) => v && (bits |= 1 << (8 + k)));
+      keep(`${l.id}#S`, bits);
+    }
     return m;
   }
 

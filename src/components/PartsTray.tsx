@@ -62,6 +62,19 @@ const GROUPS: PartGroup[] = [
     parts: [{ kind: 'timer555', name: '555 timer', hint: 'Pulses, tones' }],
   },
   {
+    title: 'Digital logic',
+    parts: [
+      { kind: 'and', name: 'AND gate', hint: 'Both inputs' },
+      { kind: 'or', name: 'OR gate', hint: 'Either input' },
+      { kind: 'not', name: 'NOT gate', hint: 'Flips it' },
+      { kind: 'nand', name: 'NAND gate', hint: 'Builds anything' },
+      { kind: 'nor', name: 'NOR gate', hint: 'Neither input' },
+      { kind: 'xor', name: 'XOR gate', hint: 'Just one input' },
+      { kind: 'dff', name: 'D flip-flop', hint: 'Remembers a bit' },
+      { kind: 'sevenseg', name: '7-segment display', hint: 'Shows a digit' },
+    ],
+  },
+  {
     title: 'Microcontroller',
     parts: [{ kind: 'arduino', name: 'Arduino Uno', hint: 'Runs your code' }],
   },

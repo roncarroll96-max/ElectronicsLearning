@@ -25,7 +25,22 @@ export type PartKind =
   | 'transformer'
   | 'bridge'
   | 'timer555'
-  | 'arduino';
+  | 'arduino'
+  | 'and'
+  | 'or'
+  | 'not'
+  | 'nand'
+  | 'nor'
+  | 'xor'
+  | 'dff'
+  | 'sevenseg';
+
+/** The logic gates: each output is a function of its inputs. */
+export const GATE_KINDS = ['and', 'or', 'not', 'nand', 'nor', 'xor'] as const;
+export type GateKind = (typeof GATE_KINDS)[number];
+/** The logic chips, run on a hidden 5 V supply: the gates and the D flip-flop. */
+export const LOGIC_KINDS: readonly PartKind[] = [...GATE_KINDS, 'dff'];
+export const isLogic = (k: PartKind): boolean => LOGIC_KINDS.includes(k);
 
 /** Wave shapes an AC source can make. */
 export type Wave = 'sine' | 'square' | 'triangle';
@@ -276,10 +291,130 @@ export const PART_DEFS: Record<PartKind, PartDef> = {
     ],
     bounds: { x: -40, y: -40, w: 80, h: 80 },
   },
+  and: {
+    kind: 'and',
+    name: 'AND gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In A', x: -60, y: -20, dir: 'l' },
+      { name: 'In B', x: -60, y: 20, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  or: {
+    kind: 'or',
+    name: 'OR gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In A', x: -60, y: -20, dir: 'l' },
+      { name: 'In B', x: -60, y: 20, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  not: {
+    kind: 'not',
+    name: 'NOT gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In', x: -60, y: 0, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  nand: {
+    kind: 'nand',
+    name: 'NAND gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In A', x: -60, y: -20, dir: 'l' },
+      { name: 'In B', x: -60, y: 20, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  nor: {
+    kind: 'nor',
+    name: 'NOR gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In A', x: -60, y: -20, dir: 'l' },
+      { name: 'In B', x: -60, y: 20, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  xor: {
+    kind: 'xor',
+    name: 'XOR gate',
+    prefix: 'U',
+    pins: [
+      { name: 'In A', x: -60, y: -20, dir: 'l' },
+      { name: 'In B', x: -60, y: 20, dir: 'l' },
+      { name: 'Out', x: 60, y: 0, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  dff: {
+    kind: 'dff',
+    name: 'D flip-flop',
+    prefix: 'U',
+    pins: [
+      { name: 'D', x: -60, y: -20, dir: 'l' },
+      { name: 'Clock', x: -60, y: 20, dir: 'l' },
+      { name: 'Q', x: 60, y: -20, dir: 'r' },
+      { name: 'Q̄ (not Q)', x: 60, y: 20, dir: 'r' },
+      { name: '5V', x: 0, y: -60, dir: 'u' },
+      { name: 'GND', x: 0, y: 60, dir: 'd' },
+    ],
+    bounds: { x: -40, y: -40, w: 80, h: 80 },
+  },
+  // Common cathode, pins laid out as on a real 5161AS display.
+  sevenseg: {
+    kind: 'sevenseg',
+    name: '7-segment display',
+    prefix: 'DS',
+    pins: [
+      { name: 'a', x: 20, y: -80, dir: 'u' },
+      { name: 'b', x: 40, y: -80, dir: 'u' },
+      { name: 'c', x: 20, y: 80, dir: 'd' },
+      { name: 'd', x: -20, y: 80, dir: 'd' },
+      { name: 'e', x: -40, y: 80, dir: 'd' },
+      { name: 'f', x: -20, y: -80, dir: 'u' },
+      { name: 'g', x: -40, y: -80, dir: 'u' },
+      { name: 'dp (dot)', x: 40, y: 80, dir: 'd' },
+      { name: 'Common (−)', x: 0, y: -80, dir: 'u' },
+      { name: 'Common (−)', x: 0, y: 80, dir: 'd' },
+    ],
+    bounds: { x: -50, y: -60, w: 100, h: 120 },
+  },
 };
 
 /** Index of each 555 pin (chip pin number − 1). */
 export const P555 = { gnd: 0, trig: 1, out: 2, reset: 3, ctrl: 4, thr: 5, dis: 6, vcc: 7 } as const;
+
+/** Pin indexes on the logic chips: inputs first, then outputs, then 5V and GND (the last two pins). */
+export function logicPins(kind: PartKind): { inputs: number[]; outputs: number[]; v5: number; gnd: number } {
+  if (kind === 'not') return { inputs: [0], outputs: [1], v5: 2, gnd: 3 };
+  if (kind === 'dff') return { inputs: [0, 1], outputs: [2, 3], v5: 4, gnd: 5 };
+  return { inputs: [0, 1], outputs: [2], v5: 3, gnd: 4 };
+}
+
+/** The 7-segment display's segments a–g and dp are pins 0–7; pins 8 and 9 are its common cathode. */
+export const SEG = { count: 8, com: 8, com2: 9 } as const;
 
 /* ---------- Geometry helpers ---------- */
 

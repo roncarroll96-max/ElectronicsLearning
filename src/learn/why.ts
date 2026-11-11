@@ -5,7 +5,7 @@
  * formulas go in `math`, shown behind a "Show the math" button.
  */
 import type { Circuit, Part } from '../model/circuit';
-import { AC_DEFAULT_F, UNO, formatFreq, formatReading, formatValue } from '../model/parts';
+import { AC_DEFAULT_F, UNO, formatFreq, logicPins, formatReading, formatValue } from '../model/parts';
 import { E6, standardDown, standardUp } from '../model/values';
 import { inductorResistance, ldrResistance } from '../sim/models';
 import type { PartReading, SimResult } from '../sim/simulate';
@@ -142,6 +142,33 @@ export function whyThisValue(part: Part, c: Circuit, sim: SimResult): Why {
         math: ['Pin current = (5 V − LED voltage) ÷ (R + 25 Ω)', 'analogRead = V_pin ÷ V_5V × 1023'],
       };
     }
+    case 'and':
+    case 'or':
+    case 'not':
+    case 'nand':
+    case 'nor':
+    case 'xor':
+      return gateWhy(part, ctx);
+    case 'dff':
+      return {
+        role: 'Memory: one bit',
+        goal: 'Remember a 1 or a 0, changing only at the moment the clock rises.',
+        reasoning:
+          'At the instant its Clock input goes from LOW to HIGH, a D flip-flop copies its D input to Q (and the opposite to Q̄), then holds it however D changes, until the next rising edge. That is how a computer’s memory and counters keep step with a clock. Feed Q̄ back to D and Q flips at every clock: it halves the frequency, and a chain of them counts in binary. (Here it runs on a hidden 5 V supply: wire its GND; its 5V pin supplies switches and pull-ups. Inputs read HIGH above 2.75 V.)',
+        choice: 'A push button on Clock “bounces”, making several edges per press on a real chip; here the button is clean. A real circuit adds a debounce (a capacitor and a Schmitt input).',
+        yours: ctx.r ? `Q is ${ctx.r.v[2] - ctx.r.v[5] > 2.5 ? 'HIGH (1)' : 'LOW (0)'} right now.` : undefined,
+        math: ['On Clock ↑: Q = D', 'Q̄ = not Q', 'Q̄ → D: Q toggles, f_out = f_clock ÷ 2'],
+      };
+    case 'sevenseg':
+      return {
+        role: 'Number display',
+        goal: 'Show a digit, 0–9, using seven LED bars (a–g) and a dot.',
+        reasoning:
+          'Inside are eight LEDs whose cathodes (−) are joined to the common pins, so the common pin goes to GND and each segment lights when its own pin is driven HIGH. Segments are named clockwise from the top: a (top), b (top right), c (bottom right), d (bottom), e (bottom left), f (top left), then g across the middle. A 1 is b and c; an 8 is all seven.',
+        choice: 'Give every segment its own resistor (220–1 kΩ), not one shared resistor in the common wire: shared, the digit would dim as more segments light.',
+        yours: ctx.r ? `Lit now: ${'abcdefg'.split('').concat('dp').filter((_, k) => ctx.r!.i[k] > 1e-4).join(' ') || 'nothing'}.` : undefined,
+        math: ['Segment current = (V_drive − ~1.9 V) ÷ R', '0 = a b c d e f · 1 = b c · 7 = a b c · 8 = all'],
+      };
     case 'ground':
       return {
         role: '0 V reference',
@@ -615,5 +642,29 @@ function pot(part: Part, ctx: Ctx): Why {
     choice: `${R(value)} is a common choice: large enough to waste little current (${V(ctx.supply)} ÷ ${R(value)} = ${A(ctx.supply / value)}), small enough that whatever you connect to the wiper doesn’t pull its voltage around.`,
     yours: r && asDivider ? `The wiper is at ${Math.round((part.pos ?? 0.5) * 100)}% and outputs ${V(r.v[2])}.` : undefined,
     math: [`Wiper voltage ≈ V(A) − (V(A) − V(B)) × position`],
+  };
+}
+
+const GATE_TEXT: Record<string, [string, string, string]> = {
+  and: ['AND', 'Its output is HIGH only when both inputs are HIGH.', 'Out = A · B'],
+  or: ['OR', 'Its output is HIGH when either input (or both) is HIGH.', 'Out = A + B'],
+  not: ['NOT', 'Its output is the opposite of its input (an “inverter”).', 'Out = not A'],
+  nand: ['NAND', 'Its output is LOW only when both inputs are HIGH: an AND followed by a NOT. With NAND gates alone you can build every other gate, and so a whole computer.', 'Out = not (A · B)'],
+  nor: ['NOR', 'Its output is HIGH only when both inputs are LOW: an OR followed by a NOT.', 'Out = not (A + B)'],
+  xor: ['XOR', 'Its output is HIGH when exactly one input is HIGH (“one or the other, not both”); it’s how computers add two bits.', 'Out = A ⊕ B'],
+};
+
+function gateWhy(part: Part, ctx: Ctx): Why {
+  const [name, rule, eq] = GATE_TEXT[part.kind];
+  const lp = logicPins(part.kind);
+  const r = ctx.r;
+  const hi = (pin: number) => (r ? (r.v[pin] - r.v[lp.gnd] > 2.5 ? '1' : '0') : '?');
+  return {
+    role: `${name} logic gate`,
+    goal: 'Make a decision from on/off signals: HIGH (about 5 V) means 1, LOW (about 0 V) means 0.',
+    reasoning: `${rule} It reads an input as HIGH above 2.75 V and LOW below 2.25 V, and drives its output to 5 V or 0 V through about 25 Ω, like a 74HC chip. Here each gate runs on a hidden 5 V supply (a simplification: a real chip has its own supply pins, shared by four gates): wire its GND to the rest of the circuit, and use its 5V pin for switches and pull-up resistors.`,
+    choice: 'An input left unconnected reads LOW here; on a real chip it floats and reads anything, so tie unused inputs to 5V or GND. An LED on the output needs a resistor (330 Ω gives about 9 mA).',
+    yours: r ? `Inputs ${lp.inputs.map(hi).join(', ')} → output ${hi(lp.outputs[0])}.` : undefined,
+    math: [eq, 'HIGH > 2.75 V, LOW < 2.25 V'],
   };
 }

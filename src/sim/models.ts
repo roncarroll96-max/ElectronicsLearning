@@ -192,3 +192,15 @@ export const TIMER555 = {
   /** Off switches and comparator inputs: a tiny leak so no pin floats (1 nS). */
   off: 1e-9,
 };
+
+/**
+ * Logic chips (gates and the D flip-flop), modelled on 74HC CMOS chips at 5 V
+ * and run from a hidden 5 V supply: a stated simplification, so a beginner
+ * wires only inputs, outputs, and GND (the 5V pin offers that supply for
+ * switches and pull-ups). Outputs drive through about 25 Ω (74HC: about 0.5 V
+ * drop at 20 mA, 25 mA absolute maximum); inputs read HIGH above 0.55 × 5 V and
+ * LOW below 0.45 × 5 V with hysteresis between (Schmitt inputs, so a slow
+ * input doesn't chatter). An unconnected input reads LOW here (a weak 1 MΩ
+ * pull-down); on a real chip it floats and reads anything.
+ */
+export const LOGIC = { vcc: 5, supplyR: 0.5, outR: 25, rise: 0.55, fall: 0.45, pullDown: 1e6, off: 1e-9 } as const;
