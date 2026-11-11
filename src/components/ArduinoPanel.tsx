@@ -10,11 +10,11 @@ const pct = (n: number, of: number) => `${Math.round((100 * n) / of)}%`;
 const mb = (n: number) => `${(n / 1e6).toFixed(1)} MB`;
 
 /**
- * An Arduino's panel in the inspector: which program it runs (an example for
- * now; the code editor comes in the next step), whether it compiled, a reset
- * button, and what it prints over Serial.
+ * An Arduino's panel in the inspector: which program it runs (an example, or
+ * your own sketch in the code editor), whether it compiled, a reset button,
+ * and what it prints over Serial.
  */
-export function ArduinoPanel({ part, edit, arduinos }: { part: Part; edit: EditFn; arduinos?: Arduinos }) {
+export function ArduinoPanel({ part, edit, arduinos, onOpenCode }: { part: Part; edit: EditFn; arduinos?: Arduinos; onOpenCode?: (id: string) => void }) {
   const view = arduinos?.views.get(part.id);
   const compiler = useCompilerState();
   const example = exampleFor(part.sketch);
@@ -49,6 +49,13 @@ export function ArduinoPanel({ part, edit, arduinos }: { part: Part; edit: EditF
           </select>
         </label>
         {example && <p className="cm-hint">{example.wiring}</p>}
+        {onOpenCode && (
+          <div className="uno-row">
+            <button className="btn primary" onClick={() => onOpenCode(part.id)} title="Write and upload your own code, and use the serial monitor">
+              Edit code
+            </button>
+          </div>
+        )}
 
         {part.burn ? null : compiler.phase === 'downloading' ? (
           <>
@@ -103,7 +110,7 @@ export function ArduinoPanel({ part, edit, arduinos }: { part: Part; edit: EditF
             )}
           </div>
           <pre className="uno-serial mono" ref={out}>
-            {view?.serial || <span className="uno-serial-empty">Nothing printed yet. Serial.println("hello") in a sketch shows up here.</span>}
+            {view?.serial || <span className="uno-serial-empty">Nothing printed yet. Serial.println("hello") in a sketch shows up here; Edit code opens the full serial monitor.</span>}
           </pre>
         </>
       )}

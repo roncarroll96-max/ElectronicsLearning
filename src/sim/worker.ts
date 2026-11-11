@@ -13,7 +13,9 @@ export type ToWorker =
   | { type: 'audioPort'; port: MessagePort }
   /** An Arduino's compiled program (its flash image), or null when it has none. */
   | { type: 'program'; id: string; program: Uint8Array | null }
-  | { type: 'resetArduino'; id: string };
+  | { type: 'resetArduino'; id: string }
+  /** Text typed into an Arduino's serial monitor. */
+  | { type: 'serialIn'; id: string; text: string };
 
 // The worker's own postMessage (typed by hand: the project's types describe a page, not a worker).
 const post = (self as unknown as { postMessage(m: unknown, transfer: Transferable[]): void }).postMessage.bind(self);
@@ -83,6 +85,9 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
     case 'program':
       engine.setProgram(m.id, m.program);
       kick();
+      break;
+    case 'serialIn':
+      engine.sendSerial(m.id, m.text);
       break;
     case 'resetArduino':
       engine.resetArduino(m.id);

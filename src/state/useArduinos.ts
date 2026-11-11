@@ -33,6 +33,8 @@ export interface Arduinos {
   /** Press a board's reset button. */
   reset: (id: string) => void;
   clearSerial: (id: string) => void;
+  /** Type text into a board's serial monitor. */
+  sendSerial: (id: string, text: string) => void;
 }
 
 /** How much printed text each board keeps. */
@@ -40,7 +42,7 @@ const SERIAL_KEEP = 20_000;
 
 /** Compiled sketches, by source text: a sketch compiles once however many boards run it. */
 const compiled = new Map<string, Promise<CompileResult>>();
-function compileOnce(source: string): Promise<CompileResult> {
+export function compileOnce(source: string): Promise<CompileResult> {
   let p = compiled.get(source);
   if (!p) {
     p = compile(source);
@@ -126,5 +128,7 @@ export function useArduinos(c: Circuit, send: (m: ToWorker, transfer?: Transfera
     bump((n) => n + 1);
   }, []);
 
-  return { views, reset, clearSerial };
+  const sendSerial = useCallback((id: string, text: string) => send({ type: 'serialIn', id, text }), [send]);
+
+  return { views, reset, clearSerial, sendSerial };
 }

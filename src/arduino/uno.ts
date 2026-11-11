@@ -64,6 +64,9 @@ export class UnoCore {
   drives: PinDrive[] = new Array<PinDrive>(UNO_PINS).fill('input');
   /** Text the program has printed (Serial) and not yet collected. */
   private serial: number[] = [];
+  /** Bytes typed into the serial monitor, waiting to arrive on RX. */
+  private rxQueue: number[] = [];
+  private usart!: AVRUSART;
   /** Bytes sent over the serial port since the last look, for the TX light. */
   txCount = 0;
   /** Held in reset because its supply is too low. */
@@ -94,6 +97,7 @@ export class UnoCore {
       this.serial.push(b);
       this.txCount++;
     };
+    this.usart = usart;
     new AVREEPROM(cpu, this.eeprom);
     this.cpu = cpu;
     this.drives = new Array<PinDrive>(UNO_PINS).fill('input');
@@ -171,6 +175,8 @@ export class UnoCore {
       return false;
     }
     const target = Math.ceil((until - this.start) * ARDUINO.clock);
+    // Typed text arrives one byte at a time, at the sketch's baud rate (nothing arrives before Serial.begin).
+    if (this.rxQueue.length && !this.usart.rxBusy && this.usart.writeByte(this.rxQueue[0]) !== false) this.rxQueue.shift();
     if (this.changed) {
       // A change made before this run (power returning, reset): report it at once.
       this.changed = false;
@@ -193,6 +199,12 @@ export class UnoCore {
       }
     }
     return false;
+  }
+
+  /** Text sent from the serial monitor to the board. */
+  sendSerial(text: string) {
+    for (const ch of text) this.rxQueue.push(ch.charCodeAt(0) & 0xff);
+    if (this.rxQueue.length > 4096) this.rxQueue.splice(0, this.rxQueue.length - 4096);
   }
 
   /** Takes the text printed since the last call. */

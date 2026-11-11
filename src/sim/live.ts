@@ -95,6 +95,10 @@ export class LiveEngine {
   }
 
   /** Press an Arduino's reset button. */
+  sendSerial(id: string, text: string): void {
+    this.cores.get(id)?.sendSerial(text);
+  }
+
   resetArduino(id: string): void {
     const core = this.cores.get(id);
     if (core && this.sim) {

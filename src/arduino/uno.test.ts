@@ -134,6 +134,20 @@ describe('Arduino Uno part', () => {
     expect(value).toBeLessThanOrEqual(768);
   }, 30_000);
 
+  it('receives text typed into the serial monitor (Serial.read), at the sketch’s baud rate', async () => {
+    const b = build();
+    const uno = b.add('arduino');
+    const { sim, cores } = start(
+      b.c,
+      uno,
+      await program('void setup() { Serial.begin(9600); }\nvoid loop() { if (Serial.available()) { char ch = Serial.read(); Serial.print((char)toupper(ch)); } }'),
+    );
+    record(sim, 0.005, () => 0);
+    cores.get(uno.id)!.sendSerial('hello\n');
+    record(sim, 0.02, () => 0); // 6 bytes at 9600 baud: about 6 ms each way
+    expect(cores.get(uno.id)!.takeSerial()).toBe('HELLO\n');
+  }, 30_000);
+
   it('reads an unconnected pin as 0 V (not some voltage in between)', async () => {
     const b = build();
     const uno = b.add('arduino');

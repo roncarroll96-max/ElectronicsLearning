@@ -41,6 +41,7 @@ import {
 import { circuitToFile, fileNameFor, parseCircuitFile } from './model/circuitFile';
 import { CircuitsMenu, type CircuitsMenuApi } from './components/CircuitsMenu';
 import { AboutPanel } from './components/AboutPanel';
+import { CodeWindow } from './components/CodeWindow';
 
 /** Everything remembered from the last visit, read once at start-up. */
 function restore() {
@@ -231,6 +232,9 @@ export function App() {
   const [saved, setSaved] = useState<SavedCircuit[]>(boot.saved);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [codeFor, setCodeFor] = useState<string | null>(null);
+  // The code editor follows its board: gone if the board is deleted (or a different circuit opens).
+  const codePart = codeFor ? circuit.parts.find((p) => p.id === codeFor && p.kind === 'arduino') : undefined;
   const inSandbox = activeWorkspace === 'sandbox';
   const sandboxSave = inSandbox && sandboxSaveId ? saved.find((s) => s.id === sandboxSaveId) : undefined;
   const circuitName = lessonActive && lesson ? lesson.title : (sandboxSave?.name ?? 'My circuit');
@@ -529,6 +533,7 @@ export function App() {
               onClose={() => setScope((s) => ({ ...s, open: false }))}
             />
           )}
+          {codePart && <CodeWindow key={codePart.id} part={codePart} edit={edit} arduinos={live.arduinos} onClose={() => setCodeFor(null)} />}
           <HelpPanel help={help} issues={issues} empty={circuit.parts.length === 0} onChange={setHelp} onApply={applyFix} />
           {noticePart && (
             <BurnNotice
@@ -575,6 +580,7 @@ export function App() {
           onRotate={rotateSelected}
           onDelete={deleteSelected}
           arduinos={live.arduinos}
+          onOpenCode={setCodeFor}
         />
         <button className="scrim" aria-label="Close panels" onClick={() => setPanelsOpen(false)} />
       </div>
