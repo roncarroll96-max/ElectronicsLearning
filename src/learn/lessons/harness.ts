@@ -29,8 +29,8 @@ export interface PlayOptions {
 }
 
 /** Plays a lesson: holds the circuit and meter, and ticks steps as the learner acts. */
-export function play(id: string, opts: PlayOptions = {}) {
-  const lesson = lessonById(id) as Lesson;
+export function play(id: string | Lesson, opts: PlayOptions = {}) {
+  const lesson = typeof id === 'string' ? (lessonById(id) as Lesson) : id;
   let c: Circuit = lesson.starter ? lesson.starter() : { parts: [], wires: [] };
   let meter: MeterState = { ...INITIAL_METER };
   let done: string[] = [];

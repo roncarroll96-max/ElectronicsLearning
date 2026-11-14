@@ -42,6 +42,8 @@ import { circuitToFile, fileNameFor, parseCircuitFile } from './model/circuitFil
 import { CircuitsMenu, type CircuitsMenuApi } from './components/CircuitsMenu';
 import { AboutPanel } from './components/AboutPanel';
 import { CodeWindow } from './components/CodeWindow';
+import { PlaygroundMenu } from './components/PlaygroundMenu';
+import { projectById } from './playground/projects';
 
 /** Everything remembered from the last visit, read once at start-up. */
 function restore() {
@@ -213,6 +215,7 @@ export function App() {
   /* ---------- Remembering everything (this browser only) ---------- */
   const [storageOk, setStorageOk] = useState(boot.storageOk);
   const [sandboxSaveId, setSandboxSaveId] = useState<string | null>(boot.session.sandboxSaveId);
+  const [playgroundId, setPlaygroundId] = useState<string | null>(boot.session.playgroundId);
 
   // Autosave the circuit on screen a moment after each change, and everything on leaving the page.
   useEffect(() => {
@@ -229,19 +232,23 @@ export function App() {
     setStorageOk(saveProgress({ steps: progress, completed: [...completed] }));
   }, [progress, completed]);
   useEffect(() => {
-    setStorageOk(saveSession({ mode, view, lessonId, lastLessonId, sandboxSaveId }));
-  }, [mode, view, lessonId, lastLessonId, sandboxSaveId]);
+    setStorageOk(saveSession({ mode, view, lessonId, lastLessonId, sandboxSaveId, playgroundId }));
+  }, [mode, view, lessonId, lastLessonId, sandboxSaveId, playgroundId]);
 
   /* ---------- Named saves, export and import ---------- */
   const [saved, setSaved] = useState<SavedCircuit[]>(boot.saved);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [playOpen, setPlayOpen] = useState(false);
   const [codeFor, setCodeFor] = useState<string | null>(null);
   // The code editor follows its board: gone if the board is deleted (or a different circuit opens).
   const codePart = codeFor ? circuit.parts.find((p) => p.id === codeFor && p.kind === 'arduino') : undefined;
   const inSandbox = activeWorkspace === 'sandbox';
   const sandboxSave = inSandbox && sandboxSaveId ? saved.find((s) => s.id === sandboxSaveId) : undefined;
-  const circuitName = lessonActive && lesson ? lesson.title : (sandboxSave?.name ?? 'My circuit');
+  const circuitName =
+    lessonActive && lesson
+      ? lesson.title
+      : (sandboxSave?.name ?? (inSandbox && playgroundId ? projectById(playgroundId)?.title : undefined) ?? 'My circuit');
 
   /** Writes the list; on failure keeps the old one and says why. */
   const storeSaved = useCallback(
@@ -256,10 +263,11 @@ export function App() {
     [],
   );
 
-  /** Opens a circuit in the sandbox. Whatever was there is one Ctrl+Z away. */
+  /** Opens a circuit in the sandbox (a save, a file, or a Playground project). Whatever was there is one Ctrl+Z away. */
   const openInSandbox = useCallback(
-    (c: Circuit, saveId: string | null) => {
+    (c: Circuit, saveId: string | null, projectId: string | null = null) => {
       setSandboxSaveId(saveId);
+      setPlaygroundId(projectId);
       setMode('sandbox');
       restartTime();
       if (activeWorkspace === 'sandbox') {
@@ -272,6 +280,17 @@ export function App() {
       }
     },
     [activeWorkspace, circuit, load, restartTime],
+  );
+
+  /* ---------- The Playground ---------- */
+  const playProject = inSandbox && playgroundId ? projectById(playgroundId) : undefined;
+  const openProject = useCallback(
+    (id: string) => {
+      const p = projectById(id);
+      if (p) openInSandbox(p.build(), null, p.id);
+      setPlayOpen(false);
+    },
+    [openInSandbox],
   );
 
   const menu: CircuitsMenuApi = {
@@ -483,17 +502,26 @@ export function App() {
         menuOpen={menuOpen}
         onToggleMenu={() => {
           setAboutOpen(false);
+          setPlayOpen(false);
           setMenuOpen((o) => !o);
         }}
         aboutOpen={aboutOpen}
         onToggleAbout={() => {
           setMenuOpen(false);
+          setPlayOpen(false);
           setAboutOpen((o) => !o);
+        }}
+        playOpen={playOpen}
+        onTogglePlay={() => {
+          setMenuOpen(false);
+          setAboutOpen(false);
+          setPlayOpen((o) => !o);
         }}
         sound={sound}
       />
       {menuOpen && <CircuitsMenu api={menu} onClose={() => setMenuOpen(false)} />}
       {aboutOpen && <AboutPanel onClose={() => setAboutOpen(false)} />}
+      {playOpen && <PlaygroundMenu current={playProject?.id ?? null} onOpen={openProject} onClose={() => setPlayOpen(false)} />}
       <div className="workspace">
         <PartsTray onTileDown={onTileDown} onTileActivate={onTileActivate} highlight={trayHint} />
         <CircuitCanvas
@@ -586,6 +614,7 @@ export function App() {
           onDelete={deleteSelected}
           arduinos={live.arduinos}
           onOpenCode={setCodeFor}
+          play={playProject ? { project: playProject, onReset: () => openProject(playProject.id), onClose: () => setPlaygroundId(null) } : undefined}
         />
         <button className="scrim" aria-label="Close panels" onClick={() => setPanelsOpen(false)} />
       </div>

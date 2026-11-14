@@ -95,8 +95,9 @@ export function nextRef(c: Circuit, kind: PartKind): string {
   if (kind === 'ground') return 'GND';
   const prefix = PART_DEFS[kind].prefix;
   let max = 0;
+  // Numbered by prefix, not kind: a 555 and a logic chip are both "U", so they get U1 and U2, never two U1s.
   for (const p of c.parts) {
-    if (p.kind !== kind) continue;
+    if (p.kind === 'ground' || PART_DEFS[p.kind].prefix !== prefix) continue;
     const n = parseInt(p.ref.slice(prefix.length), 10);
     if (n > max) max = n;
   }

@@ -11,6 +11,8 @@ import { ArduinoPanel } from './ArduinoPanel';
 import type { Arduinos } from '../state/useArduinos';
 import { WhyPanel } from './WhyPanel';
 import type { Mode } from './TopBar';
+import type { Project } from '../playground/projects';
+import { PlaygroundGuide } from './PlaygroundMenu';
 
 export interface LessonProps {
   lesson?: Lesson;
@@ -29,6 +31,8 @@ export interface LessonProps {
 interface Props extends InspectorProps {
   mode: Mode;
   learn: LessonProps;
+  /** The Playground project open in the sandbox: its guide shows while nothing is selected. */
+  play?: { project: Project; onReset: () => void; onClose: () => void };
 }
 
 interface InspectorProps {
@@ -50,7 +54,7 @@ interface InspectorProps {
 }
 
 /** Right-hand panel: tracks and lessons in Learn mode, the part inspector in Sandbox mode. */
-export function SidePanel({ mode, learn, ...inspector }: Props) {
+export function SidePanel({ mode, learn, play, ...inspector }: Props) {
   if (mode === 'learn' && !learn.lesson) {
     return (
       <aside className="panel" aria-label="Lessons">
@@ -83,6 +87,15 @@ export function SidePanel({ mode, learn, ...inspector }: Props) {
               <WhyPanel circuit={inspector.circuit} sim={inspector.sim} selection={inspector.selection} lesson={learn.lesson} />
             </div>
           )}
+        </div>
+      </aside>
+    );
+  }
+  if (play && inspector.selection.length === 0) {
+    return (
+      <aside className="panel" aria-label="Playground guide">
+        <div className="panel-body">
+          <PlaygroundGuide project={play.project} onReset={play.onReset} onClose={play.onClose} />
         </div>
       </aside>
     );

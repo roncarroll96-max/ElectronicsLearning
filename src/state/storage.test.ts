@@ -44,7 +44,7 @@ const circuit = (): Circuit => addPart({ parts: [], wires: [] }, createPart('bat
 describe('storage', () => {
   it('remembers where you were', () => {
     expect(loadSession()).toEqual(DEFAULT_SESSION);
-    const s = { mode: 'sandbox', view: 'schematic', lessonId: 'diodes', lastLessonId: 'diodes', sandboxSaveId: 's1' } as const;
+    const s = { mode: 'sandbox', view: 'schematic', lessonId: 'diodes', lastLessonId: 'diodes', sandboxSaveId: 's1', playgroundId: 'siren' } as const;
     expect(saveSession(s)).toBe(true);
     expect(loadSession()).toEqual(s);
   });

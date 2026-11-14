@@ -77,7 +77,7 @@ export function probesOn(ctx: CheckCtx, kind: PartKind, redPin: number, blackPin
 
 /* ---------- Building starter circuits ---------- */
 
-interface Placed {
+export interface Placed {
   kind: PartKind;
   x: number;
   y: number;

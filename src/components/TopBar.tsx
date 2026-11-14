@@ -16,10 +16,12 @@ interface Props {
   onToggleMenu: () => void;
   aboutOpen: boolean;
   onToggleAbout: () => void;
+  playOpen: boolean;
+  onTogglePlay: () => void;
   sound: Sound;
 }
 
-export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu, aboutOpen, onToggleAbout, sound }: Props) {
+export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTogglePanels, menuOpen, onToggleMenu, aboutOpen, onToggleAbout, playOpen, onTogglePlay, sound }: Props) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -55,6 +57,15 @@ export function TopBar({ mode, onMode, view, onView, theme, onToggleTheme, onTog
       </nav>
 
       <div className="topbar-right">
+        <button className={`btn circuits-btn play-btn${playOpen ? ' on' : ''}`} onClick={onTogglePlay} aria-expanded={playOpen} aria-haspopup="dialog" title="Playground: finished circuits to play with">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="6" height="6" rx="1.2" />
+            <rect x="11.5" y="2.5" width="6" height="6" rx="1.2" />
+            <rect x="2.5" y="11.5" width="6" height="6" rx="1.2" />
+            <path d="M14.5 11.5v6M11.5 14.5h6" strokeLinecap="round" />
+          </svg>
+          <span className="circuits-label">Playground</span>
+        </button>
         <button className={`btn circuits-btn${menuOpen ? ' on' : ''}`} onClick={onToggleMenu} aria-expanded={menuOpen} aria-haspopup="dialog">
           <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
             <path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" />

@@ -51,9 +51,11 @@ export interface Session {
   lastLessonId: string | null;
   /** The named save the sandbox circuit came from, if any. */
   sandboxSaveId: string | null;
+  /** The Playground project the sandbox circuit came from, if any (its guide shows in the side panel). */
+  playgroundId: string | null;
 }
 
-export const DEFAULT_SESSION: Session = { mode: 'learn', view: 'realistic', lessonId: null, lastLessonId: null, sandboxSaveId: null };
+export const DEFAULT_SESSION: Session = { mode: 'learn', view: 'realistic', lessonId: null, lastLessonId: null, sandboxSaveId: null, playgroundId: null };
 
 export function loadSession(): Session {
   const raw = read(KEYS.session);
@@ -65,6 +67,7 @@ export function loadSession(): Session {
     lessonId: str(raw.lessonId),
     lastLessonId: str(raw.lastLessonId),
     sandboxSaveId: str(raw.sandboxSaveId),
+    playgroundId: str(raw.playgroundId),
   };
 }
 

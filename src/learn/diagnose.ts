@@ -4,7 +4,7 @@
  * Faults are listed most important first.
  */
 import { flipPart, pinKey, updatePart, type BurnInfo, type Circuit, type Part, type PinRef } from '../model/circuit';
-import { PART_DEFS, formatReading, formatValue } from '../model/parts';
+import { PART_DEFS, SEG, P555, UNO, formatReading, formatValue, isLogic, logicPins } from '../model/parts';
 import { standardUp } from '../model/values';
 import { explainBurn, explainHot } from '../sim/explain';
 import { stressOf } from '../sim/ratings';
@@ -50,6 +50,24 @@ const pinName = (p: Part, i: number) => PART_DEFS[p.kind].pins[i].name;
 const OPEN_LOOP: IssueKind[] = ['battery-unconnected', 'missing-ground', 'open-switch', 'capacitor-blocks', 'dangling', 'open-loop'];
 
 /** `c` is the circuit as it is right now (held buttons pressed); `sim` its simulation. */
+/** A chip's output pin: one that switches what's wired to it on and off by itself. */
+function outputPin(p: Part, i: number): boolean {
+  if (p.kind === 'arduino') return i < UNO.io;
+  if (isLogic(p.kind)) return logicPins(p.kind).outputs.includes(i);
+  if (p.kind === 'timer555') return i === P555.out || i === P555.dis;
+  return false;
+}
+
+/** Pins that are normally left unconnected, so an empty one isn't a broken loop. */
+function optionalPin(p: Part, i: number): boolean {
+  if (p.kind === 'potentiometer') return i === 2;
+  if (p.kind === 'arduino') return true;
+  if (isLogic(p.kind)) return i === logicPins(p.kind).v5 || logicPins(p.kind).outputs.includes(i);
+  if (p.kind === 'timer555') return i === P555.ctrl || i === P555.reset;
+  if (p.kind === 'sevenseg') return i < SEG.count || i === SEG.com2;
+  return false;
+}
+
 export function diagnose(c: Circuit, sim: SimResult): Issue[] {
   const parts = c.parts.filter((p) => !p.id.startsWith('__'));
   if (parts.length === 0) return [];
@@ -98,8 +116,9 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
     }
   }
 
-  /* No battery. */
-  if (batteries.length === 0 && loads.length > 0) {
+  /* No battery (an Arduino, or a logic chip on its own 5 V, powers itself). */
+  const selfPowered = parts.some((p) => p.kind === 'arduino' || isLogic(p.kind));
+  if (batteries.length === 0 && loads.length > 0 && !selfPowered) {
     issues.push({
       id: 'no-battery',
       kind: 'no-battery',
@@ -120,6 +139,14 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
   }
   for (const w of c.wires) pieces.union(pinKey(w.a), pinKey(w.b));
   const pieceOf = (p: Part) => pieces.find(pinKey({ part: p.id, pin: 0 }));
+  /** A part wired, directly or through a series resistor, to a chip's output, which switches it on and off. */
+  const drivenByChip = (p: Part) =>
+    [0, 1].some((i) => {
+      const near = t.net({ part: p.id, pin: i });
+      const res = seriesPartner(t, p, i);
+      const far = res?.part.kind === 'resistor' ? t.net({ part: res.part.id, pin: 1 - res.pin }) : [];
+      return [...near, ...far].some((x) => outputPin(x.part, x.pin));
+    });
 
   // Parts that stop all current on their own, and get a more specific hint below.
   const isBackwards = (p: Part) => {
@@ -189,7 +216,7 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
           fix: 'In a steady (DC) circuit, a capacitor belongs across the supply or in a timing circuit, not in series. Replace it with a wire or a resistor, or connect it across the battery instead.',
         });
       } else if (p.kind !== 'npn' && p.kind !== 'ground') {
-        const pins = PART_DEFS[p.kind].pins.map((_, i) => i).filter((i) => !(p.kind === 'potentiometer' && i === 2));
+        const pins = PART_DEFS[p.kind].pins.map((_, i) => i).filter((i) => !optionalPin(p, i));
         const loose = pins.filter((i) => !wired(p, i));
         if (loose.length > 0 && loose.length < pins.length) {
           const i = loose[0];
@@ -261,6 +288,8 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
     if (p.kind !== 'led' || p.burn || loopBroken || issues.some((x) => x.parts.includes(p.id))) continue;
     const r = reading(p);
     if (!r || r.v[0] - r.v[1] < 0 || r.i[0] >= 1e-3) continue;
+    // An LED switched by a chip's output is meant to be dark some of the time.
+    if (drivenByChip(p)) continue;
     const res = [0, 1].map((i) => seriesPartner(t, p, i)).find((x) => x?.part.kind === 'resistor');
     const rr = res ? reading(res.part) : undefined;
     if (res && rr && Math.abs(rr.v[0] - rr.v[1]) > 1) {
