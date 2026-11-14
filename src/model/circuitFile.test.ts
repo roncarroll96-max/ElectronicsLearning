@@ -87,6 +87,17 @@ describe('circuit files', () => {
     expect(r.value.parts[2].burn).toBeUndefined();
   });
 
+  it('keeps an LED’s colour, and drops a colour it doesn’t know', () => {
+    const x = JSON.parse(JSON.stringify(sample()));
+    const k = x.parts.findIndex((p: { kind: string }) => p.kind === 'led');
+    x.parts[k].color = 'blue';
+    const r = checkCircuit(x);
+    expect(r.ok && r.value.parts[k].color).toBe('blue');
+    x.parts[k].color = 'plaid';
+    const r2 = checkCircuit(x);
+    expect(r2.ok && r2.value.parts[k].color).toBeUndefined();
+  });
+
   it('makes safe file names', () => {
     expect(fileNameFor('My LED: v2/final?')).toBe('My LED v2final.circuit.json');
     expect(fileNameFor('   ')).toBe('circuit.circuit.json');

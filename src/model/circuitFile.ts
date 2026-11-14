@@ -5,7 +5,7 @@
  * explanation, and never half-loaded.
  */
 import type { BurnInfo, Circuit, Part, PinRef, Wire } from './circuit';
-import { AC_MAX_F, AC_MIN_F, PART_DEFS, WAVES, type PartKind, type Rotation, type Wave } from './parts';
+import { AC_MAX_F, AC_MIN_F, LED_COLORS, PART_DEFS, WAVES, type LedColor, type PartKind, type Rotation, type Wave } from './parts';
 
 export const FILE_FORMAT = 'circuit-lab';
 export const FILE_VERSION = 1;
@@ -63,6 +63,7 @@ function checkPart(raw: unknown, n: number): Checked<Part> {
   if (isNum(raw.light)) part.light = Math.min(1, Math.max(0, raw.light));
   if (isNum(raw.freq)) part.freq = Math.min(AC_MAX_F, Math.max(AC_MIN_F, raw.freq));
   if (WAVES.includes(raw.wave as Wave)) part.wave = raw.wave as Wave;
+  if (kind === 'led' && LED_COLORS.includes(raw.color as LedColor)) part.color = raw.color as LedColor;
   if (typeof raw.sketch === 'string' && kind === 'arduino') {
     if (raw.sketch.length > MAX_SKETCH) return fail(`${where} (${def.name}) has a sketch that is far too long.`);
     part.sketch = raw.sketch;

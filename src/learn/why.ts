@@ -5,7 +5,7 @@
  * formulas go in `math`, shown behind a "Show the math" button.
  */
 import type { Circuit, Part } from '../model/circuit';
-import { AC_DEFAULT_F, UNO, formatFreq, logicPins, formatReading, formatValue } from '../model/parts';
+import { AC_DEFAULT_F, UNO, formatFreq, ledLook, logicPins, formatReading, formatValue } from '../model/parts';
 import { E6, standardDown, standardUp } from '../model/values';
 import { inductorResistance, ldrResistance } from '../sim/models';
 import type { PartReading, SimResult } from '../sim/simulate';
@@ -348,7 +348,9 @@ function resistor(part: Part, ctx: Ctx): Why {
 
 function ledLimiter(part: Part, led: PinAt, ctx: Ctx): Why {
   const vs = ctx.supply;
-  const vr = vs - 2;
+  const look = ledLook(led.part.color);
+  const vf = look.vf;
+  const vr = vs - vf;
   const value = part.value ?? 0;
   const role = 'LED current limiter';
   const goal = `Limit the current through ${led.part.ref}. Once an LED turns on, its voltage barely changes, so without a resistor it would take as much current as the battery can push and burn out. The target is 15–20 mA: bright, but safely below the LED’s 30 mA maximum.`;
@@ -356,7 +358,7 @@ function ledLimiter(part: Part, led: PinAt, ctx: Ctx): Why {
     return {
       role,
       goal,
-      reasoning: `A red LED needs about 2 V, and the battery only gives ${V(vs)}. There’s almost nothing left for a resistor to set the current with. Use a higher battery voltage.`,
+      reasoning: `A ${look.name.toLowerCase()} LED needs about ${vf} V, and the battery only gives ${V(vs)}. There’s almost nothing left for a resistor to set the current with. Use a higher battery voltage.`,
       math: [],
     };
   }
@@ -365,7 +367,7 @@ function ledLimiter(part: Part, led: PinAt, ctx: Ctx): Why {
   const lo = std * 0.95;
   const hi = std * 1.05;
   const math = [
-    `V(resistor) = V(battery) − V(LED) = ${vs} − 2 = ${n3(vr)} V`,
+    `V(resistor) = V(battery) − V(LED) = ${vs} − ${vf} = ${n3(vr)} V`,
     `R = V ÷ I = ${n3(vr)} V ÷ 0.020 A = ${Math.round(ideal)} Ω  →  next standard value up: ${R(std)}`,
     `I = ${n3(vr)} V ÷ ${std} Ω = ${A(vr / std)}`,
     `P = V × I = ${n3(vr)} V × ${n3(vr / std)} A = ${W(vr * (vr / std))}  (rating: 0.25 W)`,
@@ -384,7 +386,7 @@ function ledLimiter(part: Part, led: PinAt, ctx: Ctx): Why {
   return {
     role,
     goal,
-    reasoning: `The LED uses about 2 V, so this resistor must take up the rest of the battery’s voltage: ${vs} − 2 = ${n3(vr)} V. Ohm’s law then gives the value: resistance = voltage ÷ current.`,
+    reasoning: `The ${look.name.toLowerCase()} LED uses about ${vf} V, so this resistor must take up the rest of the battery’s voltage: ${vs} − ${vf} = ${n3(vr)} V. Ohm’s law then gives the value: resistance = voltage ÷ current.`,
     choice: `${n3(vr)} V ÷ 20 mA = ${Math.round(ideal)} Ω. Resistors only come in standard values, so take the next one up: ${R(std)}, for about ${A(vr / std)}. Its gold band means ±5% tolerance, so a real one could be anywhere from ${R(lo)} to ${R(hi)}, giving ${A(vr / hi)} to ${A(vr / lo)}. That’s safe either way, with a comfortable margin below 30 mA.`,
     yours,
     math,
@@ -470,14 +472,15 @@ function plainResistor(part: Part, ctx: Ctx): Why {
 
 /* ---------- Other parts ---------- */
 
-function led(_part: Part, ctx: Ctx): Why {
+function led(part: Part, ctx: Ctx): Why {
   const r = ctx.r;
+  const look = ledLook(part.color);
   let yours: string | undefined;
   if (r) {
     const vf = r.v[0] - r.v[1];
     const i = r.i[0];
     if (vf < -0.5) yours = 'It’s backwards: its anode (+) faces the battery’s −, so it blocks all current.';
-    else if (i < 1e-5) yours = `It’s off: ${V(vf)} across it isn’t enough to turn it on (a red LED needs about 1.7–2 V).`;
+    else if (i < 1e-5) yours = `It’s off: ${V(vf)} across it isn’t enough to turn it on (a ${look.name.toLowerCase()} LED needs about ${look.vf} V).`;
     else {
       const look = i < 0.001 ? 'dimly lit' : i < 0.005 ? 'lit' : i <= 0.03 ? 'brightly lit' : 'overloaded';
       yours = `${V(vf)} across it and ${A(i)} through it: ${look}.`;
@@ -488,7 +491,7 @@ function led(_part: Part, ctx: Ctx): Why {
     goal: 'Turn current into light. Brightness follows current: about 5 mA is clearly lit, 20 mA is full brightness, 30 mA is the maximum.',
     reasoning:
       'An LED only conducts one way, from anode (+, the longer leg) to cathode (−). It needs about 2 V before it lights (red; blue and white need about 3 V). Above that, its voltage hardly changes however much current flows, which is why a resistor in series must set the current.',
-    choice: 'Red LEDs need the least voltage, so they work from the smallest batteries. A typical design current is 15–20 mA.',
+    choice: `This one is ${look.name.toLowerCase()}, about ${look.vf} V at 20 mA. Red LEDs need the least voltage, so they work from the smallest batteries; blue and white need the most. A typical design current is 15–20 mA.`,
     yours,
     math: r ? [`Brightness ∝ current: ${A(r.i[0])} of 20 mA = ${Math.round((r.i[0] / 0.02) * 100)}%`] : [],
   };

@@ -3,7 +3,7 @@
  * Schematic: standard circuit symbols. Realistic: what the physical part looks like.
  */
 import type { Part } from '../model/circuit';
-import { resistorBands, type Wave } from '../model/parts';
+import { ledLook, resistorBands, type Wave } from '../model/parts';
 import { FlipFlopSymbol, GateSymbol, LogicChip, SevenSegReal, SevenSegSymbol } from './LogicBodies';
 
 const ZIGZAG = 'M-40 0H-18l3-8 6 16 6-16 6 16 6-16 6 16 3-8H40';
@@ -109,7 +109,7 @@ export function SchematicBody({ part }: { part: Part }) {
         <>
           <path className="sym" d="M-40 0H-10M10 0H40M10 -10V10" />
           <path className="sym fill" d="M-10 -10L10 0L-10 10Z" />
-          <path className="sym thin" d="M0 -12l7-8M7 -20h-5M7 -20v5M8 -8l7-8M15 -16h-5M15 -16v5" />
+          <path className="sym thin" d="M0 -12l7-8M7 -20h-5M7 -20v5M8 -8l7-8M15 -16h-5M15 -16v5" style={part.color && part.color !== 'red' ? { stroke: ledLook(part.color).edge } : undefined} />
         </>
       );
     case 'lamp':
@@ -295,8 +295,8 @@ export function RealisticBody({ part }: { part: Part }) {
       return (
         <>
           <path className="lead" d="M-40 0H-10M10 0H40" />
-          <path d="M-12 8H12" stroke="#b91c1c" strokeWidth="3" strokeLinecap="round" />
-          <path d="M-11 8V-4a11 11 0 0 1 22 0V8z" fill="#ef4444" fillOpacity="0.9" stroke="#b91c1c" />
+          <path d="M-12 8H12" stroke={ledLook(part.color).edge} strokeWidth="3" strokeLinecap="round" />
+          <path d="M-11 8V-4a11 11 0 0 1 22 0V8z" fill={ledLook(part.color).body} fillOpacity="0.9" stroke={ledLook(part.color).edge} />
           <ellipse cx="-4" cy="-6" rx="3" ry="5" fill="#fff" opacity="0.35" />
         </>
       );

@@ -4,7 +4,7 @@
  * Faults are listed most important first.
  */
 import { flipPart, pinKey, updatePart, type BurnInfo, type Circuit, type Part, type PinRef } from '../model/circuit';
-import { PART_DEFS, SEG, P555, UNO, formatReading, formatValue, isLogic, logicPins } from '../model/parts';
+import { PART_DEFS, SEG, P555, UNO, formatReading, formatValue, isLogic, ledLook, logicPins } from '../model/parts';
 import { standardUp } from '../model/values';
 import { explainBurn, explainHot } from '../sim/explain';
 import { stressOf } from '../sim/ratings';
@@ -292,8 +292,9 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
     if (drivenByChip(p)) continue;
     const res = [0, 1].map((i) => seriesPartner(t, p, i)).find((x) => x?.part.kind === 'resistor');
     const rr = res ? reading(res.part) : undefined;
+    const look = ledLook(p.color);
     if (res && rr && Math.abs(rr.v[0] - rr.v[1]) > 1) {
-      const target = standardUp((supply - 2) / 0.015);
+      const target = standardUp((supply - look.vf) / 0.015);
       issues.push({
         id: `too-dim:${p.id}`,
         kind: 'too-dim',
@@ -301,7 +302,7 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
         pins: [],
         where: `Look at ${res.part.ref}.`,
         what: `${p.ref} is barely lit: only ${A(r.i[0])} flows, because ${res.part.ref} (${formatValue(res.part.value ?? 0, 'Ω')}) is too large. LEDs need about 5–20 mA.`,
-        fix: `Use a smaller resistor. For 15 mA: (${supply} − 2) ÷ 0.015 = ${Math.round((supply - 2) / 0.015)} Ω, so ${formatValue(target, 'Ω')}.`,
+        fix: `Use a smaller resistor. For 15 mA: (${supply} − ${look.vf}) ÷ 0.015 = ${Math.round((supply - look.vf) / 0.015)} Ω, so ${formatValue(target, 'Ω')}.`,
         action: { label: `Use ${formatValue(target, 'Ω')}`, apply: (x) => updatePart(x, res.part.id, { value: target }) },
       });
     } else {
@@ -311,7 +312,7 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
         parts: [p.id],
         pins: [],
         where: `Look at ${p.ref} and whatever is in series with it.`,
-        what: `${p.ref} only gets ${V(r.v[0] - r.v[1])}, not enough to turn on (a red LED needs about 2 V).`,
+        what: `${p.ref} only gets ${V(r.v[0] - r.v[1])}, not enough to turn on (a ${look.name.toLowerCase()} LED needs about ${look.vf} V).`,
         fix: 'Use a higher battery voltage, or put fewer parts in series with it.',
       });
     }

@@ -7,7 +7,7 @@
  * - A separate piece of circuit with no ground symbol uses its battery's −
  *   terminal as 0 V (or any node, if it has no battery).
  */
-import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS, SEG, logicPins, UNO } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_V, P555, PART_DEFS, SEG, ledLook, logicPins, UNO } from '../model/parts';
 import { pinKey, type Circuit, type Part } from '../model/circuit';
 import * as M from './models';
 import { criticalVoltage, type Device } from './devices';
@@ -128,7 +128,7 @@ export function buildNetlist(c: Circuit, opts: SimOptions = {}): Netlist {
         if (part.on) resistor(0, 1, M.SWITCH_R);
         break;
       case 'led':
-        diode(0, 1, M.LED_RED, M.JUNCTION_C.led);
+        diode(0, 1, !part.color || part.color === 'red' ? M.LED_RED : M.ledModel(ledLook(part.color).vf), M.JUNCTION_C.led);
         break;
       case 'diode':
         diode(0, 1, M.DIODE_1N4148, M.JUNCTION_C.diode);

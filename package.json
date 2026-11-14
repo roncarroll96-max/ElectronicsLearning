@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "pretest": "node scripts/prepare-arduino.mjs",
-    "test": "vitest run --exclude \"src/arduino/**\" && vitest run src/arduino",
+    "test": "vitest run --exclude \"src/arduino/**\" --exclude \".claude/**\" && vitest run src/arduino --exclude \".claude/**\"",
     "test:watch": "vitest"
   },
   "dependencies": {

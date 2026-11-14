@@ -56,6 +56,17 @@ export const DIODE_1N4148: DiodeModel = { is: 2.52e-9, n: 1.752, rs: 0.568 };
 export const LED_RED: DiodeModel = { is: 2.2e-18, n: 2, rs: 5 };
 
 /**
+ * An LED of another colour, built like the red one but with the saturation
+ * current that gives `vf` volts at 20 mA. Yellow and green chips need a little
+ * more voltage than red; blue and white (a blue chip under a phosphor) about 3 V.
+ */
+export function ledModel(vf: number): DiodeModel {
+  const n = 2;
+  const rs = 5;
+  return { is: 0.02 / Math.exp((vf - 0.02 * rs) / (n * VT)), n, rs };
+}
+
+/**
  * Active buzzer, modeled as its polarity-sensitive driver: a silicon junction
  * plus about 560 Ω. Draws roughly 15 mA at 9 V and nothing when reversed.
  */

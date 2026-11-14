@@ -3,7 +3,7 @@
  * and how to choose the right part. Numbers come from the actual circuit.
  */
 import type { BurnInfo, Part } from '../model/circuit';
-import { UNO, formatReading, formatValue } from '../model/parts';
+import { UNO, formatReading, formatValue, ledLook } from '../model/parts';
 import type { PartReading } from './simulate';
 import type { Stress } from './ratings';
 import { standardUp } from '../model/values';
@@ -27,13 +27,14 @@ export function explainBurn(part: Part, b: BurnInfo, supply: number): Explanatio
   const across = b.v[0] - b.v[1];
   switch (part.kind) {
     case 'led': {
-      const r = (supply - 2) / 0.02;
+      const vf = ledLook(part.color).vf;
+      const r = (supply - vf) / 0.02;
       return {
         headline,
         why: `${A(b.value)} flowed through it. An LED can handle about 30 mA; much more overheats the tiny chip inside in moments.`,
         fix:
-          supply > 2.5
-            ? `Put a resistor in series to limit the current. Ohm’s law picks it: R = (battery voltage − LED voltage) ÷ current. For 20 mA from ${V(supply)}: (${supply} − 2) ÷ 0.02 = ${Math.round(r)} Ω, so use the next standard value up, ${formatValue(standardUp(r), 'Ω')}.`
+          supply > vf + 0.5
+            ? `Put a resistor in series to limit the current. Ohm’s law picks it: R = (battery voltage − LED voltage) ÷ current. For 20 mA from ${V(supply)}: (${supply} − ${vf}) ÷ 0.02 = ${Math.round(r)} Ω, so use the next standard value up, ${formatValue(standardUp(r), 'Ω')}.`
             : 'Put a resistor in series to limit the current: R = (battery voltage − LED voltage) ÷ current.',
       };
     }

@@ -51,6 +51,29 @@ export const AC_MIN_F = 1;
 export const AC_MAX_F = 20_000;
 export const AC_DEFAULT_F = 50;
 
+/** LED colours. Each colour's chip is a different material, so each needs a different voltage to light. */
+export type LedColor = 'red' | 'yellow' | 'green' | 'blue' | 'white';
+export const LED_COLORS: LedColor[] = ['red', 'yellow', 'green', 'blue', 'white'];
+export interface LedLook {
+  name: string;
+  /** Forward voltage at 20 mA, as a datasheet gives it. */
+  vf: number;
+  /** Plastic body, its edge, and the colour of its light. */
+  body: string;
+  edge: string;
+  light: string;
+  /** The brightest part of its light, near the chip. */
+  core: string;
+}
+export const LED_LOOK: Record<LedColor, LedLook> = {
+  red: { name: 'Red', vf: 2.0, body: '#ef4444', edge: '#b91c1c', light: '#ff3b3b', core: '#ffd0d0' },
+  yellow: { name: 'Yellow', vf: 2.1, body: '#facc15', edge: '#a16207', light: '#ffd21f', core: '#fff6c4' },
+  green: { name: 'Green', vf: 2.2, body: '#22c55e', edge: '#15803d', light: '#2ee66d', core: '#d2ffe0' },
+  blue: { name: 'Blue', vf: 3.1, body: '#3b82f6', edge: '#1d4ed8', light: '#3d8bff', core: '#d6e6ff' },
+  white: { name: 'White', vf: 3.1, body: '#e5e7eb', edge: '#9ca3af', light: '#f4f8ff', core: '#ffffff' },
+};
+export const ledLook = (c: LedColor | undefined): LedLook => LED_LOOK[c ?? 'red'];
+
 export type Dir = 'l' | 'r' | 'u' | 'd';
 export type Rotation = 0 | 90 | 180 | 270;
 export type Unit = 'Ω' | 'F' | 'V' | 'A' | 'W' | 'H';

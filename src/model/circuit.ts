@@ -4,7 +4,7 @@
  * what makes undo/redo simple.
  */
 import { BLINK_SKETCH } from '../arduino/examples';
-import { PART_DEFS, rotateDir, rotatePoint, type Dir, type PartKind, type Rotation, type Wave } from './parts';
+import { PART_DEFS, rotateDir, rotatePoint, type Dir, type PartKind, type Rotation, type Wave, type LedColor } from './parts';
 
 export interface Pt {
   x: number;
@@ -29,6 +29,8 @@ export interface Part {
   /** AC source: frequency, Hz (default 50), and wave shape (default sine). */
   freq?: number;
   wave?: Wave;
+  /** LED colour (default red). */
+  color?: LedColor;
   /** Arduino: the sketch (Arduino code) it runs. */
   sketch?: string;
   /** Set when the part was overloaded and burned out. A burned part conducts nothing. */
@@ -47,7 +49,7 @@ export interface BurnInfo {
   i: number[];
 }
 
-export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'freq' | 'wave' | 'sketch' | 'burn'>>;
+export type PartPatch = Partial<Pick<Part, 'value' | 'on' | 'pos' | 'light' | 'freq' | 'wave' | 'color' | 'sketch' | 'burn'>>;
 
 export interface PinRef {
   part: string;

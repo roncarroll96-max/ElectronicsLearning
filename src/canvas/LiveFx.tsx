@@ -4,7 +4,7 @@
  * local coordinates unless noted, and never catching the pointer.
  */
 import type { Part } from '../model/circuit';
-import { PART_DEFS, SEG, UNO, isLogic, logicPins } from '../model/parts';
+import { LED_COLORS, LED_LOOK, PART_DEFS, SEG, UNO, isLogic, ledLook, logicPins } from '../model/parts';
 import { SEG_SHAPES } from './LogicBodies';
 import { LAMP } from '../sim/models';
 import type { PartReading } from '../sim/simulate';
@@ -68,6 +68,13 @@ export function GlowDefs() {
         <stop offset="0.35" stopColor="#ff3b3b" stopOpacity="0.45" />
         <stop offset="1" stopColor="#ff3b3b" stopOpacity="0" />
       </radialGradient>
+      {LED_COLORS.map((c) => (
+        <radialGradient key={c} id={`glow-led-${c}`}>
+          <stop offset="0" stopColor={LED_LOOK[c].core} stopOpacity="0.95" />
+          <stop offset="0.35" stopColor={LED_LOOK[c].light} stopOpacity="0.45" />
+          <stop offset="1" stopColor={LED_LOOK[c].light} stopOpacity="0" />
+        </radialGradient>
+      ))}
       <radialGradient id="glow-lamp">
         <stop offset="0" stopColor="#fff4cf" stopOpacity="0.95" />
         <stop offset="0.4" stopColor="#ffc861" stopOpacity="0.45" />
@@ -81,16 +88,17 @@ export function GlowDefs() {
 export function PartGlow({ part, view, live }: { part: Part; view: View; live: PartLive }) {
   const g = live.glow;
   if (part.kind === 'led' && g > 0) {
+    const look = ledLook(part.color);
     return (
       <g className="live-fx">
-        <circle cy={view === 'realistic' ? -2 : 0} r={14 + 22 * g} fill="url(#glow-led)" opacity={0.35 + 0.65 * g} />
+        <circle cy={view === 'realistic' ? -2 : 0} r={14 + 22 * g} fill={`url(#glow-led-${part.color ?? 'red'})`} opacity={0.35 + 0.65 * g} />
         {view === 'realistic' ? (
           <>
-            <path d="M-11 8V-4a11 11 0 0 1 22 0V8z" fill="#ffd0d0" opacity={0.75 * g} />
+            <path d="M-11 8V-4a11 11 0 0 1 22 0V8z" fill={look.core} opacity={0.75 * g} />
             <circle cy="-2" r={3 + 3 * g} fill="#fff" opacity={0.8 * g} />
           </>
         ) : (
-          <path d="M-10 -10L10 0L-10 10Z" fill="#ff5b5b" opacity={g} />
+          <path d="M-10 -10L10 0L-10 10Z" fill={look.light} opacity={g} />
         )}
       </g>
     );

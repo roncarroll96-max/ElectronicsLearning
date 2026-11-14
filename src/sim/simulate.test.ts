@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Circuit, Part } from '../model/circuit';
-import { PART_DEFS, type PartKind } from '../model/parts';
+import { LED_COLORS, LED_LOOK, PART_DEFS, type LedColor, type PartKind } from '../model/parts';
 import { across, bench, current, near, reading, type Pin } from '../test/bench';
 import * as M from './models';
 import { simulate, type SimOptions } from './simulate';
@@ -269,6 +269,27 @@ describe('diodes and LEDs', () => {
   it('red LED datasheet points: 2.0 V at 20 mA, about 1.75 V at 1 mA', () => {
     near(diodeV(0.02, M.LED_RED), 2.0, 0.01);
     near(diodeV(0.001, M.LED_RED), 1.75, 0.02);
+  });
+
+  it('each LED colour drops its datasheet voltage at 20 mA, and red is unchanged', () => {
+    for (const c of LED_COLORS) near(diodeV(0.02, M.ledModel(LED_LOOK[c].vf)), LED_LOOK[c].vf, 0.01);
+    near(M.ledModel(2.0).is, M.LED_RED.is, 0.01);
+  });
+
+  it('a blue LED needs about 3 V: bright from 9 V, only glimmering from 3 V where red is bright', () => {
+    const lit = (volts: number, color?: LedColor) => {
+      const b = bench();
+      const bat = b.add('battery', volts);
+      const r1 = b.add('resistor', 100);
+      const d = b.add('led', undefined, color ? { color } : {});
+      b.wire([bat, 0], [r1, 0]);
+      b.wire([r1, 1], [d, 0]);
+      b.wire([d, 1], [bat, 1]);
+      return current(b.run(), d);
+    };
+    near(lit(9, 'blue'), (9 - 3.1) / (100 + RB), 0.05);
+    expect(lit(3)).toBeGreaterThan(8e-3); // a red one lights well
+    expect(lit(3, 'blue')).toBeLessThan(lit(3) / 5); // a blue one barely
   });
 
   it('reversed LED and reversed diode carry only tiny leakage current', () => {

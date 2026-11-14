@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { updatePart, type Circuit, type Part, type Wire } from '../model/circuit';
-import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, P555, PART_DEFS, SEG, UNO, logicPins, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
+import { AC_DEFAULT_F, AC_MAX_F, AC_MIN_F, LED_COLORS, LED_LOOK, P555, PART_DEFS, SEG, UNO, logicPins, WAVES, formatFreq, formatReading, formatValue, type Wave } from '../model/parts';
 import { explainBurn, explainHot } from '../sim/explain';
 import { ldrResistance } from '../sim/models';
 import { stressOf } from '../sim/ratings';
@@ -355,6 +355,29 @@ export function PartControls({ part, edit, pressed, onPress }: ControlProps) {
       );
     case 'acsource':
       return <AcControls part={part} edit={edit} />;
+    case 'led': {
+      const color = part.color ?? 'red';
+      return (
+        <div className="insp-control">
+          <span className="insp-control-label" title={`A ${LED_LOOK[color].name.toLowerCase()} LED needs about ${LED_LOOK[color].vf} V to light`}>
+            {LED_LOOK[color].name} · {LED_LOOK[color].vf} V
+          </span>
+          <div className="swatches" role="group" aria-label="LED colour">
+            {LED_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`swatch${c === color ? ' on' : ''}`}
+                style={{ ['--swatch' as string]: LED_LOOK[c].body }}
+                aria-pressed={c === color}
+                aria-label={LED_LOOK[c].name}
+                title={`${LED_LOOK[c].name} · about ${LED_LOOK[c].vf} V`}
+                onClick={() => edit((x) => updatePart(x, part.id, { color: c === 'red' ? undefined : c }))}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
     case 'ldr':
       return (
         <Slider
