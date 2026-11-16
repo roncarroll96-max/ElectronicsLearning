@@ -540,6 +540,7 @@ export function App() {
           onDelete={deleteSelected}
           sim={sim}
           stress={live.stress}
+          seen={live.dynamic && live.speed === 1 ? live.stress : undefined}
           soundLevels={live.levels}
           sending={sending}
           meter={meter}

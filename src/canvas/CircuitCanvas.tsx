@@ -66,6 +66,8 @@ interface Props {
   sim: SimResult;
   /** Heat-averaged readings, for "running hot" (defaults to sim). */
   stress?: SimResult;
+  /** Readings averaged over a moment, as the eye blends light: an LED dimmed by fast pulses looks dim, not flickering (defaults to sim). */
+  seen?: SimResult;
   /** How loudly each speaker is sounding (rms of its changing current, A). */
   soundLevels?: ReadonlyMap<string, number>;
   /** Arduinos that sent something over Serial just now (their TX light flashes). */
@@ -137,7 +139,7 @@ function flowStyle(i: number) {
 }
 
 export function CircuitCanvas(props: Props) {
-  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, soundLevels, sending, meter, onMeter, scope, onScope, onPress, focus } = props;
+  const { mode, view, circuit, edit, selection, onSelect, apiRef, sim, stress, seen, soundLevels, sending, meter, onMeter, scope, onScope, onPress, focus } = props;
   const [showFlow, setShowFlow] = useState(true);
   const hostRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -182,7 +184,8 @@ export function CircuitCanvas(props: Props) {
     const out = new Map<string, PartLive>();
     if (!sim.ok || sim.idle) return out;
     for (const p of circuit.parts) {
-      const r = sim.parts.get(p.id);
+      // LEDs and displays shine as the eye sees them; everything else shows this instant.
+      const r = ((p.kind === 'led' || p.kind === 'sevenseg') && seen?.ok ? seen : sim).parts.get(p.id);
       const s = stressOf(p, (stress ?? sim).parts.get(p.id));
       const fx = liveOf(p, r, !!s && s.level !== 'ok');
       // A speaker sounds when its current is changing (a steady current just holds the cone still).
@@ -191,7 +194,7 @@ export function CircuitCanvas(props: Props) {
       out.set(p.id, fx);
     }
     return out;
-  }, [circuit.parts, sim, stress, soundLevels, sending]);
+  }, [circuit.parts, sim, stress, seen, soundLevels, sending]);
 
   // Start with the world origin in the middle of the canvas.
   useLayoutEffect(() => {

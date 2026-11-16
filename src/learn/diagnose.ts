@@ -116,8 +116,8 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
     }
   }
 
-  /* No battery (an Arduino, or a logic chip on its own 5 V, powers itself). */
-  const selfPowered = parts.some((p) => p.kind === 'arduino' || isLogic(p.kind));
+  /* No battery (an AC source is a supply too; an Arduino, or a logic chip on its own 5 V, powers itself). */
+  const selfPowered = parts.some((p) => p.kind === 'acsource' || p.kind === 'arduino' || isLogic(p.kind));
   if (batteries.length === 0 && loads.length > 0 && !selfPowered) {
     issues.push({
       id: 'no-battery',
@@ -149,9 +149,11 @@ export function diagnose(c: Circuit, sim: SimResult): Issue[] {
     });
 
   // Parts that stop all current on their own, and get a more specific hint below.
+  // On AC, a diode or LED blocks for half of every cycle: that's its job (a rectifier), not a mistake.
+  const onAC = parts.some((p) => p.kind === 'acsource');
   const isBackwards = (p: Part) => {
     const r = reading(p);
-    return ['led', 'diode', 'buzzer'].includes(p.kind) && !p.burn && !!r && r.v[0] - r.v[1] < -0.5;
+    return !onAC && ['led', 'diode', 'buzzer'].includes(p.kind) && !p.burn && !!r && r.v[0] - r.v[1] < -0.5;
   };
   const isOffTransistor = (q: Part) => {
     const r = reading(q);
